@@ -5,10 +5,11 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
+
 
 from sqlalchemy import desc, func
 from sqlalchemy.dialects.postgresql import insert
-from mangum import Mangum
 
 from db import SessionLocal
 from models import Game, Player, PlayerGameStats, StandingsCurrent, Team
