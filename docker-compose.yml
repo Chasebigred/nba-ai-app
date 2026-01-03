@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: nba_postgres
+    environment:
+      POSTGRES_USER: nba        # NOT a secret (local dev)
+      POSTGRES_PASSWORD: nba    # NOT a secret (local dev)
+      POSTGRES_DB: nba_db       # NOT a secret (local dev)
+    ports:
+      - "5432:5432"
+    volumes:
+      - nba_pgdata:/var/lib/postgresql/data
+
+volumes:
+  nba_pgdata:

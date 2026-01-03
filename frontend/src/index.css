@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =========================
+   Design tokens (unchanged)
+   ========================= */
+:root {
+  --radius: 0.75rem;
+
+  /* Light */
+  --background: oklch(0.985 0.003 247.858);
+  --foreground: oklch(0.129 0.042 264.695);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.003 247.858);
+
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+
+  /* Fonts (app defaults) */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans",
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-display: "Space Grotesk", var(--font-sans);
+}
+
+/* Dark */
+.dark {
+  --background: oklch(0.08 0.03 265);
+  --foreground: oklch(0.985 0.003 247.858);
+
+  --card: oklch(0.11 0.03 265);
+  --card-foreground: oklch(0.985 0.003 247.858);
+
+  --popover: oklch(0.11 0.03 265);
+  --popover-foreground: oklch(0.985 0.003 247.858);
+
+  /* IMPORTANT: make primary NOT white in dark mode */
+  --primary: oklch(0.62 0.19 255);
+  --primary-foreground: oklch(0.98 0.01 255);
+
+  --secondary: oklch(0.18 0.03 265);
+  --secondary-foreground: oklch(0.985 0.003 247.858);
+
+  --muted: oklch(0.18 0.03 265);
+  --muted-foreground: oklch(0.72 0.02 260);
+
+  --accent: oklch(0.18 0.03 265);
+  --accent-foreground: oklch(0.985 0.003 247.858);
+
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.985 0.003 247.858);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.62 0.19 255);
+}
+
+/* ==========================================
+   Tailwind v4 theme mapping (tokens -> utils)
+   ========================================== */
+@theme inline {
+  /* Tailwind font token */
+  --font-sans: var(--font-sans);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* =========================
+   Base + font wiring
+   ========================= */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: var(--font-sans);
+    margin: 0;
+  }
+}
+
+/* =========================
+   Display font utility
+   Use: className="font-display"
+   ========================= */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* =========================
+   Textarea scrollbar styling
+   (matches app dark/ScrollArea vibe)
+   ========================= */
+
+/* Chrome / Edge / Safari */
+textarea::-webkit-scrollbar {
+  width: 10px;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: rgba(2, 6, 23, 0.35); /* slate-950-ish */
+  border-left: 1px solid rgba(30, 41, 59, 0.7); /* slate-800/70 */
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25); /* slate-300-ish */
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+/* Firefox */
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) rgba(2, 6, 23, 0.35);
+}
