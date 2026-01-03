@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: NBA AI FastAPI (Lambda + HTTP API)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 1024
+
+Resources:
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - "https://main.d2xmyri88e3bvf.amplifyapp.com"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - "*"
+
+  NbaAiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: main.handler
+      Environment:
+        Variables:
+          DATABASE_URL: "postgresql+psycopg2://nba:YOUR_PASSWORD@nba-ai-db.coboaqywigqx.us-east-1.rds.amazonaws.com:5432/nba_db"
+          FRONTEND_ORIGINS: "https://main.d2xmyri88e3bvf.amplifyapp.com"
+      Events:
+        ProxyApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: HTTPS API base URL
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
