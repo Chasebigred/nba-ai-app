@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import desc, func
 from sqlalchemy.dialects.postgresql import insert
+from mangum import Mangum
 
 from db import SessionLocal
 from models import Game, Player, PlayerGameStats, StandingsCurrent, Team
@@ -689,3 +690,6 @@ def refresh_standings_current(season: str = "2025-26"):
         return {"ok": True, "season": season, "upserted": upserted, "source": "warehouse"}
     finally:
         db.close()
+
+handler = Mangum(app)
+
