@@ -18,6 +18,8 @@ from nba_api.stats.endpoints import leaguestandings
 # Your ETL job (updates Games/Players/Stats in the warehouse)
 from etl.backfill_last_14_days import main as backfill_main
 
+import os
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -27,9 +29,14 @@ app = FastAPI(title="NBA AI App API")
 # CORS
 # -----------------------------------------------------------------------------
 # Frontend runs on Vite in local dev; allow it to call the API directly.
+FRONTEND_ORIGINS = os.getenv(
+    "FRONTEND_ORIGINS",
+    "http://localhost:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[o.strip() for o in FRONTEND_ORIGINS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
