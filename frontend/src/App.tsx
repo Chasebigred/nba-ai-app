@@ -895,29 +895,34 @@ export default function App() {
    */
   async function refreshWarehouseAll() {
     setRefreshStatus("loading");
+
+    // Optional: avoid infinite waiting
+    const controller = new AbortController();
+    const t = window.setTimeout(() => controller.abort(), 28000); // 28s
+
     try {
-      await fetch(`${API}/warehouse/refresh/last_days?days=14&season=2025-26`, { method: "POST" });
-      await fetch(`${API}/warehouse/standings/refresh?season=2025-26`, { method: "POST" });
+      const r1 = await fetch(`${API}/warehouse/refresh/last_days?days=14&season=2025-26`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      if (!r1.ok) throw new Error(`refresh/last_days failed: ${r1.status}`);
+
+      const r2 = await fetch(`${API}/warehouse/standings/refresh?season=2025-26`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      if (!r2.ok) throw new Error(`standings/refresh failed: ${r2.status}`);
 
       setRefreshStatus("ok");
       setDbLastUpdated(new Date().toISOString());
-
-      // Refresh only what the user is currently looking at (fast and predictable).
-      if (tab === "leaders") {
-        fetchLeaders();
-      } else if (tab === "player") {
-        if (playerQuery.trim()) fetchPlayerSearch(playerQuery);
-        if (selectedPlayer) {
-          fetchPlayerLastN(selectedPlayer.nba_player_id, showAllGames ? ALL_GAMES_N : DEFAULT_LAST_N);
-        }
-      } else if (tab === "standings") {
-        // Standings component re-fetches when this token changes.
-        setStandingsRefreshToken((x) => x + 1);
-      }
-    } catch {
+    } catch (e) {
+      console.error(e);
       setRefreshStatus("error");
+    } finally {
+      window.clearTimeout(t);
     }
   }
+
 
   // Initial leaders fetch so the Leaders page has data on first navigation.
   useEffect(() => {
