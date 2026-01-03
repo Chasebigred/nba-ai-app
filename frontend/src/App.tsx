@@ -387,7 +387,7 @@ function HomePage() {
 
             <Card className="bg-slate-950/25 border-slate-800/70">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base text-slate-100">AWS hosting plan (planned)</CardTitle>
+                <CardTitle className="text-base text-slate-100">AWS deployment</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ul className="list-disc pl-5 space-y-2">
@@ -395,8 +395,7 @@ function HomePage() {
                     <span className="font-semibold text-slate-100">Frontend:</span> AWS Amplify (static hosting + CI/CD).
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">API:</span> AWS-hosted FastAPI service (serverless or
-                    container-based).
+                    <span className="font-semibold text-slate-100">API:</span> FastAPI service running on Amazon EC2
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Database:</span> Amazon RDS (PostgreSQL).
@@ -406,8 +405,8 @@ function HomePage() {
                   </li>
                 </ul>
                 <div className="mt-2 text-xs text-slate-400">
-                  This section describes the intended production deployment architecture rather than the current local
-                  development setup.
+                  This section describes the production deployment architecture; local development uses Docker-based
+                  tooling
                 </div>
               </CardContent>
             </Card>
