@@ -75,6 +75,7 @@ This design ensures consistent performance even if external data sources are una
 ---
 
 ## Repository Structure
+```
 nba-ai-app/
 ├── backend/
 │ ├── main.py # FastAPI application
@@ -92,7 +93,7 @@ nba-ai-app/
 │
 ├── docker-compose.yml # Local development database only
 └── README.md
-
+```
 
 ---
 
