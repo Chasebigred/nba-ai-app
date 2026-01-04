@@ -1,18 +1,40 @@
 import sys
 import os
+import random
 from datetime import datetime, timedelta
 import time
-from typing import Optional, Set
+from typing import Optional
+
+from requests.exceptions import ReadTimeout, ConnectionError
 
 # Ensure `backend/` is on the Python path so ETL can be run from `/etl` directly.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv3
+from nba_api.library.http import NBAStatsHTTP
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import select
 
 from db import SessionLocal
 from models import Team, Player, Game, PlayerGameStats
+
+
+# ---------------------------
+# stats.nba.com "browser-like" headers
+# ---------------------------
+# stats.nba.com can be flaky / throttly from cloud IPs. These headers often help
+# responses behave more like a normal browser request.
+NBAStatsHTTP().headers.update(
+    {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://www.nba.com/",
+        "Origin": "https://www.nba.com",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+)
 
 
 def upper_cols(df):
@@ -172,14 +194,64 @@ def infer_home_away_from_team_df(teams):
     return home_team_id, away_team_id
 
 
-def get_loaded_game_ids(db, season: str) -> Set[str]:
+def fetch_games_df_with_retries(
+    start_date: str,
+    end_date: str,
+    season: str,
+    timeout: int = 60,
+    retries: int = 10,
+    base_sleep: float = 2.0,
+):
     """
-    Return all game IDs already present in the DB for a given season.
+    Fetch LeagueGameFinder dataframe with retries/backoff.
 
-    This allows ETL reruns to be fast/resumable by skipping games already ingested.
+    Key idea:
+      - Use a smaller per-attempt timeout (fail fast)
+      - Use more retries overall (eventually one attempt hits a healthy response)
     """
-    rows = db.execute(select(Game.nba_game_id).where(Game.season == season)).all()
-    return {r[0] for r in rows if r and r[0] is not None}
+    last_err = None
+
+    for attempt in range(retries + 1):
+        try:
+            gf = leaguegamefinder.LeagueGameFinder(
+                date_from_nullable=start_date,
+                date_to_nullable=end_date,
+                league_id_nullable="00",
+                season_nullable=season,
+                season_type_nullable="Regular Season",
+                timeout=timeout,
+            )
+            return gf.get_data_frames()[0]
+
+        except (ReadTimeout, ConnectionError) as e:
+            last_err = e
+            if attempt < retries:
+                sleep_s = base_sleep * (2 ** attempt) + random.uniform(0.0, 1.0)
+                # cap the backoff so it doesn't explode into huge waits
+                sleep_s = min(sleep_s, 60.0)
+                print(
+                    f"LeagueGameFinder timeout/network error (attempt {attempt+1}/{retries+1}). "
+                    f"Sleeping {sleep_s:.1f}s..."
+                )
+                time.sleep(sleep_s)
+                continue
+            raise
+
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            if ("timed out" in msg or "timeout" in msg) and attempt < retries:
+                sleep_s = base_sleep * (2 ** attempt) + random.uniform(0.0, 1.0)
+                sleep_s = min(sleep_s, 60.0)
+                print(
+                    f"LeagueGameFinder error that looks like timeout (attempt {attempt+1}/{retries+1}). "
+                    f"Sleeping {sleep_s:.1f}s..."
+                )
+                time.sleep(sleep_s)
+                continue
+            raise
+
+    raise last_err
 
 
 def fetch_boxscore_frames(game_id: str, timeout: int = 60, retries: int = 1, retry_sleep: float = 1.0):
@@ -188,10 +260,6 @@ def fetch_boxscore_frames(game_id: str, timeout: int = 60, retries: int = 1, ret
 
     Returns:
         (player_df, team_df) on success, or None if data is missing/unavailable.
-
-    nba_api occasionally returns an empty/None response, which can surface as
-    AttributeError inside the library. This wrapper treats those cases as a
-    "skip and continue" instead of crashing the full backfill.
     """
     for attempt in range(retries + 1):
         try:
@@ -206,7 +274,6 @@ def fetch_boxscore_frames(game_id: str, timeout: int = 60, retries: int = 1, ret
             return player_df, team_df
 
         except AttributeError as e:
-            # Common failure mode when stats.nba.com returns an empty payload.
             msg = str(e)
             if "NoneType" in msg and "get" in msg:
                 if attempt < retries:
@@ -216,7 +283,6 @@ def fetch_boxscore_frames(game_id: str, timeout: int = 60, retries: int = 1, ret
             raise
 
         except Exception:
-            # Transient network issues / parsing issues: retry once, else propagate.
             if attempt < retries:
                 time.sleep(retry_sleep)
                 continue
@@ -229,26 +295,22 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
     """
     Backfill the most recent `days` of NBA regular season games into the warehouse.
 
-    High-level flow:
-      1) Pull recent game IDs via LeagueGameFinder
-      2) For each game, fetch box score (players + teams) via BoxScoreTraditionalV3
-      3) Upsert teams, game metadata, players, and per-player stat lines
-      4) Commit per game so the job is resumable and partial progress is preserved
+    NOTE: This version does NOT skip already-loaded games. It always re-fetches
+    and upserts, effectively "overriding" existing rows for the date range.
     """
     start_date = (datetime.utcnow() - timedelta(days=days)).strftime("%m/%d/%Y")
     end_date = datetime.utcnow().strftime("%m/%d/%Y")
 
     print(f"Fetching games from {start_date} to {end_date} ...")
 
-    gf = leaguegamefinder.LeagueGameFinder(
-        date_from_nullable=start_date,
-        date_to_nullable=end_date,
-        league_id_nullable="00",
-        season_nullable=season,
-        season_type_nullable="Regular Season",
+    games_df = fetch_games_df_with_retries(
+        start_date=start_date,
+        end_date=end_date,
+        season=season,
         timeout=60,
+        retries=10,
+        base_sleep=2.0,
     )
-    games_df = gf.get_data_frames()[0]
 
     game_ids = sorted(set(games_df["GAME_ID"].astype(str).tolist()))
     game_ids = game_ids[:max_games]
@@ -257,25 +319,14 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
 
     db = SessionLocal()
     try:
-        loaded_game_ids = get_loaded_game_ids(db, season)
-        print(f"Already loaded games in DB: {len(loaded_game_ids)}")
-
         fetched = 0
         skipped = 0
         failed = 0
 
         for i, game_id in enumerate(game_ids, start=1):
-            # Skip work if we already have this game in our DB.
-            if game_id in loaded_game_ids:
-                skipped += 1
-                if skipped <= 8 or skipped % 50 == 0:
-                    print(f"[{i}/{len(game_ids)}] SKIP (already loaded) GAME_ID={game_id}")
-                continue
-
             print(f"[{i}/{len(game_ids)}] FETCH GAME_ID={game_id}")
 
             try:
-                # Fetch box score (player + team frames). If unavailable, skip gracefully.
                 frames = fetch_boxscore_frames(game_id=game_id, timeout=60, retries=1, retry_sleep=1.0)
                 if frames is None:
                     skipped += 1
@@ -284,9 +335,6 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
 
                 player_df, team_df = frames
 
-                # --------------------
-                # Teams (upsert)
-                # --------------------
                 teams = []
                 for _, t in team_df.iterrows():
                     team_id = pick(t, "TEAMID", "TEAM_ID", "TEAMIDHOME", "TEAMIDAWAY")
@@ -317,16 +365,10 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
                         abbreviation=tt.get("team_abbr"),
                     )
 
-                # --------------------
-                # Home/Away + Scores
-                # --------------------
                 home_team_id, away_team_id = infer_home_away_from_team_df(teams)
                 home_score = next((tt["pts"] for tt in teams if tt["team_id"] == home_team_id), None)
                 away_score = next((tt["pts"] for tt in teams if tt["team_id"] == away_team_id), None)
 
-                # --------------------
-                # Game date (from LeagueGameFinder)
-                # --------------------
                 game_date = None
                 try:
                     g_row = games_df.loc[games_df["GAME_ID"].astype(str) == game_id].iloc[0]
@@ -354,9 +396,6 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
                     status="Final" if (home_score is not None and away_score is not None) else None,
                 )
 
-                # --------------------
-                # Player stats (upsert)
-                # --------------------
                 for _, p in player_df.iterrows():
                     nba_player_id = pick(p, "PERSONID", "PLAYERID", "PLAYER_ID")
                     nba_team_id = pick(p, "TEAMID", "TEAM_ID")
@@ -370,7 +409,9 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
                         player_name = pick(p, "PLAYERNAME", "NAMEI")
 
                     if nba_player_id is None:
-                        raise KeyError(f"Could not find PERSONID in player_df columns: {list(player_df.columns)[:40]}")
+                        raise KeyError(
+                            f"Could not find PERSONID in player_df columns: {list(player_df.columns)[:40]}"
+                        )
 
                     nba_player_id = int(nba_player_id)
                     nba_team_id = int(nba_team_id) if nba_team_id is not None and str(nba_team_id).isdigit() else None
@@ -399,7 +440,6 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
                         "fg3a": to_int(pick(p, "THREEPOINTERSATTEMPTED", "FG3A")),
                         "ftm": to_int(pick(p, "FREETHROWSMADE", "FTM")),
                         "fta": to_int(pick(p, "FREETHROWSATTEMPTED", "FTA")),
-                        # Keep raw value. Some payloads represent this as "+12" / "-7".
                         "plus_minus": pick(
                             p,
                             "PLUSMINUS",
@@ -413,9 +453,7 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
 
                 db.commit()
                 fetched += 1
-                loaded_game_ids.add(game_id)
 
-                # Be polite to stats.nba.com; throttle only after a successful ingest.
                 time.sleep(sleep_seconds)
 
             except KeyboardInterrupt:
