@@ -139,22 +139,7 @@ function fmtPct(x: number | null | undefined, decimals: number = 1) {
   return (x * 100).toFixed(decimals) + "%";
 }
 
-/**
- * "Last updated" badge formatter.
- * This runs on a timer so the UI updates without refresh.
- */
-function timeAgo(iso: string | null) {
-  if (!iso) return "—";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
-}
+
 
 /**
  * DB game dates sometimes come in as:
@@ -711,15 +696,6 @@ export default function App() {
   const ALL_GAMES_N = 9999;
   const [showAllGames, setShowAllGames] = useState(false);
 
-  // -------------------------
-  // Manual refresh + standings re-fetch
-  // -------------------------
-  const [refreshStatus, setRefreshStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
-  const [standingsRefreshToken, setStandingsRefreshToken] = useState(0);
-
-  // Used for the "Last updated" badge at the top right.
-  const [dbLastUpdated, setDbLastUpdated] = useState<string | null>(null);
-
   /**
    * Tick state is only here so timeAgo() can update live.
    * (No UI directly reads "tick"; it just forces re-render once per second.)
@@ -888,39 +864,6 @@ export default function App() {
       .catch(() => setPlayerSearchStatus("error"));
   }
 
-  /**
-   * Manual refresh button:
-   * - kicks the backend to ingest recent games + standings
-   * - then refreshes the currently visible view to reflect new data
-   */
-async function refreshWarehouseAll() {
-  setRefreshStatus("loading");
-  console.log("REFRESH clicked. API =", API);
-
-  // Pick how many days you want (start with 1 for speed)
-  const days = 1;
-
-  const url1 = `${API}/warehouse/refresh/last_days?days=${days}&season=2025-26`;
-  const url2 = `${API}/warehouse/standings/refresh?season=2025-26`;
-
-  console.log("refresh url1:", url1);
-  console.log("refresh url2:", url2);
-
-  // Fire-and-forget (do NOT await; this job can take a long time)
-  fetch(url1, { method: "POST" })
-    .then((r) => console.log("refresh last_days status:", r.status))
-    .catch((e) => console.log("refresh last_days error:", e));
-
-  fetch(url2, { method: "POST" })
-    .then((r) => console.log("refresh standings status:", r.status))
-    .catch((e) => console.log("refresh standings error:", e));
-
-  // Immediately unblock the UI so it never gets stuck
-  setRefreshStatus("ok");
-  setDbLastUpdated(new Date().toISOString());
-}
-
-
 
   // Initial leaders fetch so the Leaders page has data on first navigation.
   useEffect(() => {
@@ -1053,17 +996,6 @@ async function refreshWarehouseAll() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="bg-slate-950/35 border border-slate-800/70 text-slate-200">
-              Last updated: <span className="ml-1 text-slate-300">{timeAgo(dbLastUpdated)}</span>
-            </Badge>
-
-            <Button
-              onClick={refreshWarehouseAll}
-              disabled={refreshStatus === "loading"}
-              className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.32)] active:scale-[0.99] transition"
-            >
-              {refreshStatus === "loading" ? "Refreshing…" : "Refresh"}
-            </Button>
           </div>
         </div>
 
@@ -1439,7 +1371,7 @@ async function refreshWarehouseAll() {
                   <SectionHeader title="Standings" />
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <Standings refreshToken={standingsRefreshToken} />
+                  <Standings refreshToken={0} />
                 </CardContent>
               </GlassCard>
             )}
