@@ -286,8 +286,9 @@ function HomePage() {
             <span className="font-semibold text-slate-100">NBA Insight</span> is a full-stack NBA analytics application
             focused on fast, clean exploration of player data, league leaders, and standings. The frontend is built with{" "}
             <span className="font-semibold text-slate-100">React + TypeScript</span>, backed by a{" "}
-            <span className="font-semibold text-slate-100">FastAPI (Python)</span> service and a{" "}
-            <span className="font-semibold text-slate-100">PostgreSQL</span> database optimized for efficient reads.
+            <span className="font-semibold text-slate-100">FastAPI (Python)</span> API running on{" "}
+            <span className="font-semibold text-slate-100">AWS Lambda</span> and a{" "}
+            <span className="font-semibold text-slate-100">PostgreSQL</span> warehouse optimized for efficient reads.
           </p>
 
           <div className="grid gap-3 md:grid-cols-2">
@@ -298,18 +299,22 @@ function HomePage() {
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ul className="list-disc pl-5 space-y-2">
                   <li>
-                    <span className="font-semibold text-slate-100">Search players:</span> Find NBA players stored in the
-                    database and view recent game logs along with per-game averages.
+                    <span className="font-semibold text-slate-100">Search players:</span> Search players stored in the
+                    database and view recent game logs plus per-game averages.
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Explore leaders:</span> Browse leaderboard categories
-                    (3PT%, FG%, PPG, RPG, APG, BPG). Selecting a player jumps directly to their detailed stats page.
+                    (3PT%, FG%, PPG, RPG, APG, BPG). Selecting a player jumps directly to their detail view.
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Check standings:</span> View current season standings
-                    served directly from the database for fast load times.
+                    served from the database for fast load times.
                   </li>
                 </ul>
+
+                <div className="mt-3 text-xs text-slate-400">
+                  Tip: leaderboards support “Load more” by increasing the API limit parameter.
+                </div>
               </CardContent>
             </Card>
 
@@ -322,25 +327,31 @@ function HomePage() {
                   <li>
                     The React frontend calls{" "}
                     <span className="font-semibold text-slate-100">REST-style JSON endpoints</span> exposed by a{" "}
-                    <span className="font-semibold text-slate-100">FastAPI (Python)</span> backend running on AWS.
+                    <span className="font-semibold text-slate-100">FastAPI (Python)</span> backend deployed on{" "}
+                    <span className="font-semibold text-slate-100">AWS Lambda</span>.
                   </li>
                   <li>
-                    Backend compute queries PostgreSQL to return precomputed player stats, leaderboards, and standings.
+                    Read endpoints query PostgreSQL (warehouse tables) to return player stats, leaderboards, and standings.
                   </li>
                   <li>
-                    A scheduled workflow runs nightly (e.g., around{" "}
+                    A scheduled job runs nightly (e.g., around{" "}
                     <span className="font-semibold text-slate-100">2 AM</span>) to ingest recent NBA games and{" "}
                     <span className="font-semibold text-slate-100">upsert</span> teams, players, games, and box scores.
                   </li>
                   <li>
-                    Standings and leaderboard data are stored in dedicated warehouse tables to ensure consistent, fast
-                    reads.
+                    Standings are refreshed by ingesting from an external NBA data source and upserting into a dedicated{" "}
+                    <span className="font-semibold text-slate-100">standings_current</span> table.
                   </li>
                   <li>
-                    The UI consumes only database-backed responses — no live third-party API calls occur during page
-                    loads.
+                    The UI consumes database-backed responses — external API calls are used for ETL only (not for user-facing
+                    reads).
                   </li>
                 </ol>
+
+                <div className="mt-3 text-xs text-slate-400">
+                  Note: The API includes admin ETL endpoints for maintenance/testing, but the UI is designed around scheduled
+                  updates (no manual refresh button).
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -365,16 +376,16 @@ function HomePage() {
                     shadcn/ui.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Backend & compute:</span> FastAPI{" "}
-                    <span className="font-semibold text-slate-100">(Python)</span>, AWS Lambda, SQLAlchemy ORM.
+                    <span className="font-semibold text-slate-100">Backend:</span> FastAPI <span className="font-semibold text-slate-100">(Python)</span>{" "}
+                    on AWS Lambda, SQLAlchemy ORM, REST-style JSON endpoints.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Database:</span> PostgreSQL with schema versioning via
-                    Alembic migrations.
+                    <span className="font-semibold text-slate-100">Database:</span> PostgreSQL (Amazon RDS) with Alembic
+                    migrations.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Data ingestion:</span> Scheduled AWS Lambda jobs that
-                    keep NBA data current.
+                    <span className="font-semibold text-slate-100">Data pipeline:</span> Scheduled ETL that backfills recent
+                    games and refreshes standings snapshots.
                   </li>
                 </ul>
               </CardContent>
@@ -390,17 +401,17 @@ function HomePage() {
                     <span className="font-semibold text-slate-100">Frontend:</span> AWS Amplify (static hosting + CI/CD).
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">API & compute:</span> FastAPI (Python) running on AWS
-                    Lambda.
+                    <span className="font-semibold text-slate-100">API:</span> Amazon API Gateway → AWS Lambda (FastAPI
+                    (Python)).
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Database:</span> Amazon RDS (PostgreSQL).
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Observability:</span> Amazon CloudWatch logs and
-                    metrics.
+                    <span className="font-semibold text-slate-100">Observability:</span> Amazon CloudWatch logs and metrics.
                   </li>
                 </ul>
+
                 <div className="mt-2 text-xs text-slate-400">
                   Production runs on AWS; local development uses Docker-based tooling.
                 </div>
@@ -412,6 +423,7 @@ function HomePage() {
     </div>
   );
 }
+
 
 
 type ChatMsg = {

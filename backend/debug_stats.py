@@ -1,3 +1,5 @@
+#This file was used for small debugging.
+
 from db import SessionLocal
 from models import PlayerGameStats
 
