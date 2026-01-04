@@ -893,35 +893,33 @@ export default function App() {
    * - kicks the backend to ingest recent games + standings
    * - then refreshes the currently visible view to reflect new data
    */
-  async function refreshWarehouseAll() {
-    setRefreshStatus("loading");
+async function refreshWarehouseAll() {
+  setRefreshStatus("loading");
+  console.log("REFRESH clicked. API =", API);
 
-    // Optional: avoid infinite waiting
-    const controller = new AbortController();
-    const t = window.setTimeout(() => controller.abort(), 28000); // 28s
+  // Pick how many days you want (start with 1 for speed)
+  const days = 1;
 
-    try {
-      const r1 = await fetch(`${API}/warehouse/refresh/last_days?days=14&season=2025-26`, {
-        method: "POST",
-        signal: controller.signal,
-      });
-      if (!r1.ok) throw new Error(`refresh/last_days failed: ${r1.status}`);
+  const url1 = `${API}/warehouse/refresh/last_days?days=${days}&season=2025-26`;
+  const url2 = `${API}/warehouse/standings/refresh?season=2025-26`;
 
-      const r2 = await fetch(`${API}/warehouse/standings/refresh?season=2025-26`, {
-        method: "POST",
-        signal: controller.signal,
-      });
-      if (!r2.ok) throw new Error(`standings/refresh failed: ${r2.status}`);
+  console.log("refresh url1:", url1);
+  console.log("refresh url2:", url2);
 
-      setRefreshStatus("ok");
-      setDbLastUpdated(new Date().toISOString());
-    } catch (e) {
-      console.error(e);
-      setRefreshStatus("error");
-    } finally {
-      window.clearTimeout(t);
-    }
-  }
+  // Fire-and-forget (do NOT await; this job can take a long time)
+  fetch(url1, { method: "POST" })
+    .then((r) => console.log("refresh last_days status:", r.status))
+    .catch((e) => console.log("refresh last_days error:", e));
+
+  fetch(url2, { method: "POST" })
+    .then((r) => console.log("refresh standings status:", r.status))
+    .catch((e) => console.log("refresh standings error:", e));
+
+  // Immediately unblock the UI so it never gets stuck
+  setRefreshStatus("ok");
+  setDbLastUpdated(new Date().toISOString());
+}
+
 
 
   // Initial leaders fetch so the Leaders page has data on first navigation.
