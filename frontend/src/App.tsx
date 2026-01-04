@@ -139,8 +139,6 @@ function fmtPct(x: number | null | undefined, decimals: number = 1) {
   return (x * 100).toFixed(decimals) + "%";
 }
 
-
-
 /**
  * DB game dates sometimes come in as:
  * - "YYYY-MM-DD"
@@ -376,8 +374,9 @@ function HomePage() {
                     shadcn/ui.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Backend:</span> FastAPI <span className="font-semibold text-slate-100">(Python)</span>{" "}
-                    on AWS Lambda, SQLAlchemy ORM, REST-style JSON endpoints.
+                    <span className="font-semibold text-slate-100">Backend:</span> FastAPI{" "}
+                    <span className="font-semibold text-slate-100">(Python)</span> on AWS Lambda, SQLAlchemy ORM, REST-style
+                    JSON endpoints.
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Database:</span> PostgreSQL (Amazon RDS) with Alembic
@@ -423,8 +422,6 @@ function HomePage() {
     </div>
   );
 }
-
-
 
 type ChatMsg = {
   id: string;
@@ -514,7 +511,7 @@ function AIPage() {
           <div className="grid gap-3 md:grid-cols-3">
             {/* LEFT: conversation thread + composer (text-message layout) */}
             <div className="md:col-span-2">
-              <div className="rounded-2xl border border-slate-800/70 bg-slate-950/25 overflow-hidden flex flex-col h-[620px]">
+              <div className="rounded-2xl border border-slate-800/70 bg-slate-950/25 overflow-hidden flex flex-col h-[70vh] sm:h-[620px]">
                 <div className="px-4 py-2 bg-slate-950/35 text-sm text-slate-200 font-semibold">Conversation</div>
 
                 {/* Scrollable messages area (matches the Standings ScrollArea scrollbar style) */}
@@ -678,22 +675,22 @@ export default function App() {
   const TAB_UNLOCK_MS = 800;
 
   function requestTabChange(next: AppTab) {
-  if (next === tab) return;
-  if (isTabTransitioning) return;
+    if (next === tab) return;
+    if (isTabTransitioning) return;
 
-  pendingTabRef.current = next;
-  setIsTabTransitioning(true);
+    pendingTabRef.current = next;
+    setIsTabTransitioning(true);
 
-  window.setTimeout(() => {
-    const target = pendingTabRef.current;
-    if (target) setTab(target);
-  }, TAB_SWAP_MS);
+    window.setTimeout(() => {
+      const target = pendingTabRef.current;
+      if (target) setTab(target);
+    }, TAB_SWAP_MS);
 
-  window.setTimeout(() => {
-    pendingTabRef.current = null;
-    setIsTabTransitioning(false);
-  }, TAB_UNLOCK_MS);
-}
+    window.setTimeout(() => {
+      pendingTabRef.current = null;
+      setIsTabTransitioning(false);
+    }, TAB_UNLOCK_MS);
+  }
 
   // -------------------------
   // Leaders state + pagination
@@ -878,7 +875,6 @@ export default function App() {
       .catch(() => setPlayerSearchStatus("error"));
   }
 
-
   // Initial leaders fetch so the Leaders page has data on first navigation.
   useEffect(() => {
     fetchLeaders();
@@ -906,7 +902,7 @@ export default function App() {
 
   // Shared styling for top-level tabs.
   const triggerBase =
-    "rounded-xl px-4 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_24px_rgba(37,99,235,0.25)]";
+    "rounded-xl px-3 sm:px-4 text-sm sm:text-base data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_24px_rgba(37,99,235,0.25)]";
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(99,102,241,0.12),transparent_50%)] bg-slate-950 text-slate-100">
@@ -924,7 +920,7 @@ export default function App() {
 
           {/* The "ball" (logo) rolls across the screen */}
           <div
-            className="absolute top-1/2 -translate-y-1/2"
+            className="nbai-roll absolute top-1/2 -translate-y-1/2"
             style={{
               // Start off-screen left, end off-screen right.
               animation: `nbaiRollAcross ${TAB_TRANSITION_MS}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`,
@@ -960,7 +956,7 @@ export default function App() {
               }
               @media (max-width: 640px) {
                 /* On small screens, slightly smaller so it doesn't feel overwhelming */
-                .nbai-roll img { width: 52vmin; height: 52vmin; }
+                .nbai-roll img { width: 52vmin !important; height: 52vmin !important; }
               }
             `}
           </style>
@@ -968,14 +964,14 @@ export default function App() {
       ) : null}
 
       <div className="mx-auto max-w-6xl px-5 py-6">
-        {/* Top bar (branding + refresh controls) */}
+        {/* Top bar (branding) */}
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-3 sm:gap-5">
               <img
                 src={logo}
                 alt="NBA AI"
-                className="h-25 w-25 rounded-xl object-contain shadow-[0_0_30px_rgba(37,99,235,0.25)]"
+                className="h-16 w-16 sm:h-20 sm:w-20 md:h-25 md:w-25 rounded-xl object-contain shadow-[0_0_30px_rgba(37,99,235,0.25)]"
               />
 
               <div>
@@ -1009,8 +1005,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-          </div>
+          <div className="flex flex-wrap items-center gap-2">{/* Reserved for future actions */}</div>
         </div>
 
         <Separator className="my-6 bg-slate-800/80" />
@@ -1023,23 +1018,25 @@ export default function App() {
             requestTabChange(v as AppTab);
           }}
         >
-          <TabsList className="bg-slate-950/35 border border-slate-800/70 backdrop-blur-xl p-1 rounded-2xl">
-            <TabsTrigger value="home" className={triggerBase} disabled={isTabTransitioning}>
-              Home
-            </TabsTrigger>
-            <TabsTrigger value="ai" className={triggerBase} disabled={isTabTransitioning}>
-              NBAI
-            </TabsTrigger>
-            <TabsTrigger value="player" className={triggerBase} disabled={isTabTransitioning}>
-              Player
-            </TabsTrigger>
-            <TabsTrigger value="leaders" className={triggerBase} disabled={isTabTransitioning}>
-              Leaders
-            </TabsTrigger>
-            <TabsTrigger value="standings" className={triggerBase} disabled={isTabTransitioning}>
-              Standings
-            </TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto">
+            <TabsList className="bg-slate-950/35 border border-slate-800/70 backdrop-blur-xl p-1 rounded-2xl w-max min-w-full flex-nowrap">
+              <TabsTrigger value="home" className={triggerBase} disabled={isTabTransitioning}>
+                Home
+              </TabsTrigger>
+              <TabsTrigger value="ai" className={triggerBase} disabled={isTabTransitioning}>
+                NBAI
+              </TabsTrigger>
+              <TabsTrigger value="player" className={triggerBase} disabled={isTabTransitioning}>
+                Player
+              </TabsTrigger>
+              <TabsTrigger value="leaders" className={triggerBase} disabled={isTabTransitioning}>
+                Leaders
+              </TabsTrigger>
+              <TabsTrigger value="standings" className={triggerBase} disabled={isTabTransitioning}>
+                Standings
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <div className="mt-6">
             {/* HOME */}
@@ -1062,7 +1059,7 @@ export default function App() {
                         value={playerQuery}
                         onChange={(e) => setPlayerQuery(e.target.value)}
                         placeholder="Search players (e.g., Stephen Curry)"
-                        className="max-w-md bg-slate-950/35 border-slate-800/70 text-slate-100 placeholder:text-slate-400"
+                        className="w-full sm:max-w-md bg-slate-950/35 border-slate-800/70 text-slate-100 placeholder:text-slate-400"
                       />
 
                       {selectedPlayer && (
@@ -1310,9 +1307,9 @@ export default function App() {
                           }}
                         >
                           <CardContent className="p-3 flex items-center gap-4">
-                            <div className="w-10 shrink-0 text-center">
+                            <div className="w-9 sm:w-10 shrink-0 text-center">
                               <div className="text-xs text-slate-400">RANK</div>
-                              <div className="text-2xl font-bold text-slate-100">#{idx + 1}</div>
+                              <div className="text-xl sm:text-2xl font-bold text-slate-100">#{idx + 1}</div>
                             </div>
 
                             <img
