@@ -269,13 +269,13 @@ function HomePage() {
       <GlassCard>
         <CardHeader className="pb-3">
           <SectionHeader
-            title="About this project"
+            title="Project overview"
             right={
               <Badge
                 variant="secondary"
                 className="bg-slate-950/35 border border-slate-800/70 text-slate-200 w-fit"
               >
-                Author: <span className="ml-1 text-slate-100 font-semibold">Chase Brown</span>
+                Built by <span className="ml-1 text-slate-100 font-semibold">Chase Brown</span>
               </Badge>
             }
           />
@@ -283,34 +283,31 @@ function HomePage() {
 
         <CardContent className="pt-0 space-y-4 text-slate-200">
           <p className="text-slate-300 leading-relaxed">
-            <span className="font-semibold text-slate-100">NBA Insight</span> is a full-stack NBA analytics web
-            application built as a portfolio project. It provides a clean, fast interface for exploring player
-            performance data, league leaders, and standings using a React + TypeScript frontend and a FastAPI backend
-            backed by a SQL database.
+            <span className="font-semibold text-slate-100">NBA Insight</span> is a full-stack NBA analytics application
+            focused on fast, clean exploration of player data, league leaders, and standings. The frontend is built with{" "}
+            <span className="font-semibold text-slate-100">React + TypeScript</span>, backed by a{" "}
+            <span className="font-semibold text-slate-100">FastAPI (Python)</span> service and a{" "}
+            <span className="font-semibold text-slate-100">PostgreSQL</span> database optimized for efficient reads.
           </p>
 
           <div className="grid gap-3 md:grid-cols-2">
             <Card className="bg-slate-950/25 border-slate-800/70">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base text-slate-100">What you can do here</CardTitle>
+                <CardTitle className="text-base text-slate-100">What you can do</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ul className="list-disc pl-5 space-y-2">
                   <li>
-                    <span className="font-semibold text-slate-100">Player Search:</span> Search NBA players stored in the
-                    database and view recent game logs and per-game averages.
+                    <span className="font-semibold text-slate-100">Search players:</span> Find NBA players stored in the
+                    database and view recent game logs along with per-game averages.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Leaders:</span> Browse leaderboard categories (3PT%,
-                    FG%, PPG, RPG, APG, BPG). Clicking a player jumps directly to their detailed stats page.
+                    <span className="font-semibold text-slate-100">Explore leaders:</span> Browse leaderboard categories
+                    (3PT%, FG%, PPG, RPG, APG, BPG). Selecting a player jumps directly to their detailed stats page.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Standings:</span> View current season standings stored
-                    in the database.
-                  </li>
-                  <li>
-                    <span className="font-semibold text-slate-100">Refresh:</span> Manually trigger backend refresh
-                    endpoints to ingest recent games and update stored data.
+                    <span className="font-semibold text-slate-100">Check standings:</span> View current season standings
+                    served directly from the database for fast load times.
                   </li>
                 </ul>
               </CardContent>
@@ -318,18 +315,31 @@ function HomePage() {
 
             <Card className="bg-slate-950/25 border-slate-800/70">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base text-slate-100">How it works (high level)</CardTitle>
+                <CardTitle className="text-base text-slate-100">How it works</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ol className="list-decimal pl-5 space-y-2">
-                  <li>The React frontend calls JSON endpoints exposed by a FastAPI backend.</li>
                   <li>
-                    NBA game data is periodically ingested from external APIs and upserted into a SQL database (teams,
-                    players, games, and player game stats).
+                    The React frontend calls{" "}
+                    <span className="font-semibold text-slate-100">REST-style JSON endpoints</span> exposed by a{" "}
+                    <span className="font-semibold text-slate-100">FastAPI (Python)</span> backend running on AWS.
                   </li>
-                  <li>Standings are refreshed and stored in a dedicated table for fast reads.</li>
-                  <li>Leaderboards use simple pagination by increasing the API result limit (“Load more”).</li>
-                  <li>The UI focuses on reading precomputed database data rather than making live external API calls.</li>
+                  <li>
+                    Backend compute queries PostgreSQL to return precomputed player stats, leaderboards, and standings.
+                  </li>
+                  <li>
+                    A scheduled workflow runs nightly (e.g., around{" "}
+                    <span className="font-semibold text-slate-100">2 AM</span>) to ingest recent NBA games and{" "}
+                    <span className="font-semibold text-slate-100">upsert</span> teams, players, games, and box scores.
+                  </li>
+                  <li>
+                    Standings and leaderboard data are stored in dedicated warehouse tables to ensure consistent, fast
+                    reads.
+                  </li>
+                  <li>
+                    The UI consumes only database-backed responses — no live third-party API calls occur during page
+                    loads.
+                  </li>
                 </ol>
               </CardContent>
             </Card>
@@ -346,7 +356,7 @@ function HomePage() {
           <div className="grid gap-3 md:grid-cols-2">
             <Card className="bg-slate-950/25 border-slate-800/70">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base text-slate-100">Current technologies</CardTitle>
+                <CardTitle className="text-base text-slate-100">Tech stack</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ul className="list-disc pl-5 space-y-2">
@@ -355,16 +365,16 @@ function HomePage() {
                     shadcn/ui.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Backend:</span> FastAPI (Python), SQLAlchemy ORM,
-                    REST-style endpoints.
+                    <span className="font-semibold text-slate-100">Backend & compute:</span> FastAPI{" "}
+                    <span className="font-semibold text-slate-100">(Python)</span>, AWS Lambda, SQLAlchemy ORM.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Database:</span> SQL database (PostgreSQL-compatible
-                    schema with Alembic migrations).
+                    <span className="font-semibold text-slate-100">Database:</span> PostgreSQL with schema versioning via
+                    Alembic migrations.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Data ingestion:</span> Periodic backfill jobs that
-                    pull recent NBA games and box scores into the database.
+                    <span className="font-semibold text-slate-100">Data ingestion:</span> Scheduled AWS Lambda jobs that
+                    keep NBA data current.
                   </li>
                 </ul>
               </CardContent>
@@ -380,18 +390,19 @@ function HomePage() {
                     <span className="font-semibold text-slate-100">Frontend:</span> AWS Amplify (static hosting + CI/CD).
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">API:</span> FastAPI service running on Amazon EC2
+                    <span className="font-semibold text-slate-100">API & compute:</span> FastAPI (Python) running on AWS
+                    Lambda.
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Database:</span> Amazon RDS (PostgreSQL).
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Observability:</span> CloudWatch logs and metrics.
+                    <span className="font-semibold text-slate-100">Observability:</span> Amazon CloudWatch logs and
+                    metrics.
                   </li>
                 </ul>
                 <div className="mt-2 text-xs text-slate-400">
-                  This section describes the production deployment architecture; local development uses Docker-based
-                  tooling
+                  Production runs on AWS; local development uses Docker-based tooling.
                 </div>
               </CardContent>
             </Card>
@@ -401,6 +412,7 @@ function HomePage() {
     </div>
   );
 }
+
 
 type ChatMsg = {
   id: string;
