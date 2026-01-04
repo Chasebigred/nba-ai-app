@@ -697,16 +697,6 @@ export default function App() {
   const [showAllGames, setShowAllGames] = useState(false);
 
   /**
-   * Tick state is only here so timeAgo() can update live.
-   * (No UI directly reads "tick"; it just forces re-render once per second.)
-   */
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  /**
    * Reset paging when the leaderboard sub-tab changes.
    * Example: switching from 3PT% -> PPG should start back at top 10.
    */
