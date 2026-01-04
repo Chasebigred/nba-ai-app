@@ -901,8 +901,13 @@ export default function App() {
   }, [playerQuery]);
 
   // Shared styling for top-level tabs.
+  // Mobile: a bit tighter padding + slightly smaller text so it doesn't overflow.
   const triggerBase =
     "rounded-xl px-3 sm:px-4 text-sm sm:text-base data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_24px_rgba(37,99,235,0.25)]";
+
+  // Leaders subtabs: keep them compact and allow horizontal scrolling on mobile.
+  const leaderTriggerBase =
+    "rounded-xl px-2.5 sm:px-4 text-xs sm:text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_24px_rgba(37,99,235,0.25)]";
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(99,102,241,0.12),transparent_50%)] bg-slate-950 text-slate-100">
@@ -964,7 +969,7 @@ export default function App() {
       ) : null}
 
       <div className="mx-auto max-w-6xl px-5 py-6">
-        {/* Top bar (branding) */}
+        {/* Top bar (branding + refresh controls) */}
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="flex items-center gap-3 sm:gap-5">
@@ -976,14 +981,7 @@ export default function App() {
 
               <div>
                 <h1 className="flex items-baseline gap-3 font-display text-3xl md:text-4xl font-bold tracking-[-0.03em]">
-                  <span
-                    className="
-                      text-blue-400
-                      drop-shadow-[0_0_32px_rgba(59,130,246,0.55)]
-                    "
-                  >
-                    NBA Insight
-                  </span>
+                  <span className="text-blue-400 drop-shadow-[0_0_32px_rgba(59,130,246,0.55)]">NBA Insight</span>
 
                   <span
                     className="
@@ -1005,7 +1003,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">{/* Reserved for future actions */}</div>
+          <div className="flex flex-wrap items-center gap-2">{/* reserved */}</div>
         </div>
 
         <Separator className="my-6 bg-slate-800/80" />
@@ -1018,6 +1016,7 @@ export default function App() {
             requestTabChange(v as AppTab);
           }}
         >
+          {/* MOBILE FIX: allow top tabs to scroll instead of clipping */}
           <div className="w-full overflow-x-auto">
             <TabsList className="bg-slate-950/35 border border-slate-800/70 backdrop-blur-xl p-1 rounded-2xl w-max min-w-full flex-nowrap">
               <TabsTrigger value="home" className={triggerBase} disabled={isTabTransitioning}>
@@ -1129,6 +1128,10 @@ export default function App() {
                         ))}
                       </div>
                     )}
+
+                    {playerSearchStatus === "error" ? (
+                      <div className="mt-3 text-sm text-rose-300">Player search failed. Check API connectivity.</div>
+                    ) : null}
                   </CardContent>
                 </GlassCard>
 
@@ -1204,6 +1207,10 @@ export default function App() {
                                 <Skeleton key={i} className="h-[78px] rounded-2xl bg-slate-800/60" />
                               ))}
                             </div>
+                          ) : playerStatsStatus === "error" ? (
+                            <div className="mt-4 text-sm text-rose-300">
+                              Failed to load player stats. Check the API / CORS / base URL.
+                            </div>
                           ) : null}
                         </div>
                       </div>
@@ -1214,6 +1221,7 @@ export default function App() {
                           Game Log ({playerStats?.games?.length ?? 0})
                         </div>
 
+                        {/* MOBILE NOTE: vertical scroll for many rows (already). Horizontal is okay because table is narrow. */}
                         <div className="max-h-[520px] overflow-auto">
                           <Table>
                             <TableHeader className="sticky top-0 bg-slate-950/80 backdrop-blur">
@@ -1272,13 +1280,16 @@ export default function App() {
 
                   <CardContent className="pt-0">
                     <Tabs value={leaderTab} onValueChange={(v) => setLeaderTab(v as LeaderTab)}>
-                      <TabsList className="mt-3 bg-slate-950/35 border border-slate-800/70 backdrop-blur-xl p-1 rounded-2xl w-fit">
-                        {LEADER_SUBTABS.map(({ key, label }) => (
-                          <TabsTrigger key={key} value={key} className={triggerBase}>
-                            {label}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
+                      {/* MOBILE FIX: horizontal scroll for leader subtabs so they never go off-screen */}
+                      <div className="mt-3 w-full overflow-x-auto">
+                        <TabsList className="bg-slate-950/35 border border-slate-800/70 backdrop-blur-xl p-1 rounded-2xl w-max min-w-full flex-nowrap">
+                          {LEADER_SUBTABS.map(({ key, label }) => (
+                            <TabsTrigger key={key} value={key} className={leaderTriggerBase}>
+                              {label}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </div>
                     </Tabs>
 
                     {!IMPLEMENTED_ROUTES[leaderTab] ? (
@@ -1306,7 +1317,7 @@ export default function App() {
                             if (e.key === "Enter") jumpToPlayerFromLeader(p.player_id, p.player_name);
                           }}
                         >
-                          <CardContent className="p-3 flex items-center gap-4">
+                          <CardContent className="p-3 flex items-center gap-3 sm:gap-4">
                             <div className="w-9 sm:w-10 shrink-0 text-center">
                               <div className="text-xs text-slate-400">RANK</div>
                               <div className="text-xl sm:text-2xl font-bold text-slate-100">#{idx + 1}</div>
@@ -1381,8 +1392,14 @@ export default function App() {
                 <CardHeader className="pb-3">
                   <SectionHeader title="Standings" />
                 </CardHeader>
+
                 <CardContent className="pt-0">
-                  <Standings refreshToken={0} />
+                  {/* MOBILE FIX: allow horizontal scroll if Standings table is wider than screen */}
+                  <div className="w-full overflow-x-auto">
+                    <div className="min-w-max">
+                      <Standings refreshToken={0} />
+                    </div>
+                  </div>
                 </CardContent>
               </GlassCard>
             )}
