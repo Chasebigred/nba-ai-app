@@ -3,8 +3,7 @@ name: Scheduled ETL
 on:
   workflow_dispatch: {}
   schedule:
-    # 2:00 AM America/New_York = 07:00 UTC during standard time (winter)
-    # (GitHub schedules use UTC)
+    # 2:00 AM US-East
     - cron: "0 7 * * *"
 
 jobs:
