@@ -9,7 +9,7 @@ A full-stack NBA analytics application that ingests official NBA data, stores it
 The NBA AI App separates data ingestion from data consumption to ensure reliability, performance, and scalability.
 
 - External NBA data is ingested via scheduled ETL jobs  
-- All frontend reads come exclusively from a PostgreSQL warehouse  
+- All frontend reads come exclusively from a PostgreSQL warehouse  (AWS RDS)
 - No live third-party API calls occur on user-facing requests  
 - Leaderboards and aggregates are computed from stored data  
 
@@ -48,8 +48,8 @@ This mirrors real-world analytics systems where read performance and API stabili
 - shadcn/ui
 
 ### Infrastructure
-- AWS (RDS, EC@)
-- Docker (local database only, not used in production)
+- AWS (RDS)
+- Docker (local development and experimentation)
 - Environment-based configuration (no secrets in repository)
 
 ---
@@ -102,9 +102,9 @@ nba-ai-app/
 This application is deployed on AWS with a cost-conscious setup suitable for a portfolio project.
 
 - Frontend: AWS Amplify Hosting with CI/CD from GitHub
-- Backend: FastAPI running on a single Amazon EC2 instance (Docker or systemd-managed Uvicorn)
+- Backend: FastAPI (python)
 - Database: Amazon RDS for PostgreSQL
-- ETL: Scheduled ETL jobs run on the backend host (cron/systemd timer) to ingest NBA data and upsert into the warehouse
+- ETL: Scheduled ETL jobs on Windows Task Scheduler (due to NBA's API blocking cloud IPs, couldn't use cloud schedule tasks)
 - Configuration/Secrets: Environment variables (optionally stored in AWS Systems Manager Parameter Store / Secrets Manager)
 
 This architecture keeps user-facing requests fast and stable by serving reads from the PostgreSQL warehouse while isolating ingestion work to scheduled ETL runs.
@@ -120,10 +120,8 @@ This project was built to demonstrate:
 - Data warehousing and ETL pipelines
 - Clean API boundaries
 - Full-stack development skills
-- Cloud-first architecture decisions
+- Cloud-first architecture decisions and cost-aware tradeoffs
 - Polished React frontend
-
-The focus is on system design and correctness rather than a minimal demo.
 
 ---
 
