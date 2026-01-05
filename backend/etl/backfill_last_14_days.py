@@ -18,11 +18,7 @@ from db import SessionLocal
 from models import Team, Player, Game, PlayerGameStats
 
 
-# ---------------------------
-# stats.nba.com "browser-like" headers
-# ---------------------------
-# stats.nba.com can be flaky / throttly from cloud IPs. These headers often help
-# responses behave more like a normal browser request.
+#Tried to get cloud scheduled ETLs to work using a non cloud IP. Still didnt work so am now using windows task scheduler on my own computer. (Dont want to pay for a server)
 NBAStatsHTTP.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
     "Referer": "https://www.nba.com/",
