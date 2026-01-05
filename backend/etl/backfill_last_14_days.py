@@ -11,7 +11,7 @@ from requests.exceptions import ReadTimeout, ConnectionError
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv3
-from nba_api.library.http import NBAStatsHTTP
+from nba_api.stats.library.http import NBAStatsHTTP
 from sqlalchemy.dialects.postgresql import insert
 
 from db import SessionLocal
@@ -23,18 +23,14 @@ from models import Team, Player, Game, PlayerGameStats
 # ---------------------------
 # stats.nba.com can be flaky / throttly from cloud IPs. These headers often help
 # responses behave more like a normal browser request.
-NBAStatsHTTP().headers.update(
-    {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Referer": "https://www.nba.com/",
-        "Origin": "https://www.nba.com",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-)
+NBAStatsHTTP.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+    "Referer": "https://www.nba.com/",
+    "Origin": "https://www.nba.com",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "application/json, text/plain, */*",
+    "Connection": "keep-alive",
+})
 
 
 def upper_cols(df):
