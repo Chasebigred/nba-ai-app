@@ -447,13 +447,13 @@ function AIPage() {
    */
   const examples = [
     "Compare Stephen Curry and Damian Lillard in the last 5 games.",
-    "Summarize Nikola Jokić’s last 10 games (PTS/REB/AST) and FG%.",
+    "Summarize Nikola Jokić’s last 10 games",
     "Which players improved their scoring the most over the last 10 games?",
-    "Which star players are trending up? Compare last 10 games vs season averages",
+    "Which star players are trending up? Compare last 10 games vs season averages.",
     "Show me the top 5 'winning impact' players by average +/- in the last 3 games.",
-    "What is the best single game stat line so far this season? (PTS/REB/AST)",
+    "What is the best single game stat line so far this season?",
     "Who has the most minutes? Show me the average and the total for that player.",
-    "Who’s been the best all-around player in the last 3 games? (min 25 MPG)",
+    "Who’s been the best all-around player in the last 3 games?",
   ];
 
   /**
