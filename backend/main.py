@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,7 +34,6 @@ app = FastAPI(title="NBA AI App API")
 # -----------------------------------------------------------------------------
 # CORS
 # -----------------------------------------------------------------------------
-# Frontend runs on Vite in local dev; allow it to call the API directly.
 FRONTEND_ORIGINS = os.getenv(
     "FRONTEND_ORIGINS",
     "http://localhost:5173"
@@ -111,15 +110,42 @@ def resolve_player(db, name: str) -> Optional[Player]:
     )
 
 
+def clamp_n(n: int, *, default: int, min_n: int = 1, max_n: int = 50) -> int:
+    """
+    Clamp N to protect DB + OpenAI payload sizes.
+    - min_n: minimum window
+    - max_n: maximum window (adjust if you want)
+    """
+    try:
+        n_int = int(n)
+    except Exception:
+        return default
+    if n_int < min_n:
+        return min_n
+    if n_int > max_n:
+        return max_n
+    return n_int
+
+
+def parse_last_n_games(q: str) -> Optional[int]:
+    """
+    Extracts N from phrases like:
+      - "last 3 games"
+      - "last 10 game(s)"
+    Returns int(N) or None.
+    """
+    m = re.search(r"\blast\s+(\d+)\s+games?\b", q, re.I)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------
 # WAREHOUSE (DB) - READ ENDPOINTS
 # ---------------------------------------------------------------------------------------------------------------------------------------------
-# IMPORTANT:
-# - The frontend reads ONLY from the warehouse (SQL DB).
-# - External NBA API calls are done only in refresh endpoints (ETL), not on reads.
-# ---------------------------------------------------------------------------------------------------------------------------------------------
-
-
 @app.get("/warehouse/counts")
 def warehouse_counts():
     """Quick counts for sanity checking DB state (useful during development)."""
@@ -183,6 +209,7 @@ def player_last_n(nba_player_id: int, season: str = "2025-26", n: int = 10):
     - Sorts most recent first using Game.game_date.
     - Shooting averages are computed as totals ratio (better than averaging per-game %).
     """
+    n = clamp_n(n, default=10, max_n=82)
     db = SessionLocal()
     try:
         rows = (
@@ -209,7 +236,6 @@ def player_last_n(nba_player_id: int, season: str = "2025-26", n: int = 10):
         stats = [r[0] for r in rows]
         games = [r[1] for r in rows]
 
-        # Build game rows for the UI table
         out_games = []
         for s, g in zip(stats, games):
             fg_pct_game = (float(s.fgm or 0) / float(s.fga or 0)) if (s.fga or 0) > 0 else None
@@ -233,7 +259,6 @@ def player_last_n(nba_player_id: int, season: str = "2025-26", n: int = 10):
                 }
             )
 
-        # Totals for "ratio" shooting averages (more accurate than averaging per-game %)
         total_fgm = sum((s.fgm or 0) for s in stats)
         total_fga = sum((s.fga or 0) for s in stats)
 
@@ -269,11 +294,6 @@ def player_last_n(nba_player_id: int, season: str = "2025-26", n: int = 10):
 # ---------------------------------------------------------------------------------------------------------------------------------------------
 # WAREHOUSE LEADERS (DB) - READ ENDPOINTS
 # ---------------------------------------------------------------------------------------------------------------------------------------------
-# These endpoints compute leaderboard stats from stored player_game_stats.
-# The UI "Load more" behavior works by increasing the limit parameter.
-# ---------------------------------------------------------------------------------------------------------------------------------------------
-
-
 def _base_leaders_query(db, season: str):
     """
     Common base: join stats -> games -> player -> team.
@@ -318,8 +338,8 @@ def warehouse_leaders_pts(season: str = "2025-26", min_gp: int = 10, limit: int 
                     "player_name": r.player_name,
                     "team_abbreviation": r.team_abbreviation,
                     "gp": gp,
-                    "value": round(total / gp, 2),  # PPG
-                    "total": int(total),  # optional (nice for debugging / future UI)
+                    "value": round(total / gp, 2),
+                    "total": int(total),
                 }
             )
 
@@ -362,7 +382,7 @@ def warehouse_leaders_reb(season: str = "2025-26", min_gp: int = 10, limit: int 
                     "player_name": r.player_name,
                     "team_abbreviation": r.team_abbreviation,
                     "gp": gp,
-                    "value": round(total / gp, 2),  # RPG
+                    "value": round(total / gp, 2),
                     "total": int(total),
                 }
             )
@@ -406,7 +426,7 @@ def warehouse_leaders_ast(season: str = "2025-26", min_gp: int = 10, limit: int 
                     "player_name": r.player_name,
                     "team_abbreviation": r.team_abbreviation,
                     "gp": gp,
-                    "value": round(total / gp, 2),  # APG
+                    "value": round(total / gp, 2),
                     "total": int(total),
                 }
             )
@@ -450,7 +470,7 @@ def warehouse_leaders_blk(season: str = "2025-26", min_gp: int = 10, limit: int 
                     "player_name": r.player_name,
                     "team_abbreviation": r.team_abbreviation,
                     "gp": gp,
-                    "value": round(total / gp, 2),  # BPG
+                    "value": round(total / gp, 2),
                     "total": int(total),
                 }
             )
@@ -637,13 +657,6 @@ def warehouse_standings_current(season: str = "2025-26"):
 # ---------------------------------------------------------------------------------------------------------------------------------------------
 # AI ENDPOINTS (OpenAI + Warehouse)
 # ---------------------------------------------------------------------------------------------------------------------------------------------
-# Design:
-# - User asks natural language question
-# - We map to a supported "intent"
-# - We query warehouse safely (NO AI-written SQL)
-# - We send a compact payload to OpenAI to turn into a readable answer
-# ---------------------------------------------------------------------------------------------------------------------------------------------
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
 
@@ -681,7 +694,7 @@ def summarize_with_openai(question: str, payload: Dict[str, Any]) -> str:
 
 def parse_compare_players(q: str) -> Optional[Tuple[str, str, int]]:
     # "Compare Stephen Curry and Damian Lillard in the last 5 games."
-    m = re.search(r"compare\s+(.+?)\s+and\s+(.+?)\s+in\s+the\s+last\s+(\d+)\s+games", q, re.I)
+    m = re.search(r"compare\s+(.+?)\s+and\s+(.+?)\s+in\s+the\s+last\s+(\d+)\s+games?", q, re.I)
     if not m:
         return None
     return m.group(1).strip(), m.group(2).strip(), int(m.group(3))
@@ -689,7 +702,7 @@ def parse_compare_players(q: str) -> Optional[Tuple[str, str, int]]:
 
 def parse_summarize_last_n(q: str) -> Optional[Tuple[str, int]]:
     # "Summarize Nikola Jokić’s last 10 games"
-    m = re.search(r"summarize\s+(.+?)['’]s\s+last\s+(\d+)\s+games", q, re.I)
+    m = re.search(r"summarize\s+(.+?)['’]s\s+last\s+(\d+)\s+games?", q, re.I)
     if not m:
         return None
     return m.group(1).strip(), int(m.group(2))
@@ -704,6 +717,9 @@ def ai_ask(req: AiAskRequest):
     season = req.season or "2025-26"
     q_lower = question.lower()
 
+    # Generic N extraction for any “last N games” question
+    n_from_q = parse_last_n_games(question)
+
     db = SessionLocal()
     try:
         # ---------------------------------------------------------------------
@@ -712,6 +728,7 @@ def ai_ask(req: AiAskRequest):
         parsed = parse_compare_players(question)
         if parsed:
             p1_name, p2_name, n = parsed
+            n = clamp_n(n, default=5, max_n=50)
 
             p1 = resolve_player(db, p1_name)
             p2 = resolve_player(db, p2_name)
@@ -719,7 +736,7 @@ def ai_ask(req: AiAskRequest):
                 raise HTTPException(status_code=404, detail="Could not resolve one or both player names.")
 
             def fetch_last_n(pid: int):
-                rows = (
+                return (
                     db.query(PlayerGameStats, Game)
                     .join(Game, PlayerGameStats.nba_game_id == Game.nba_game_id)
                     .filter(PlayerGameStats.nba_player_id == pid)
@@ -729,7 +746,6 @@ def ai_ask(req: AiAskRequest):
                     .limit(n)
                     .all()
                 )
-                return rows
 
             def summarize_rows(rows):
                 stats = [r[0] for r in rows]
@@ -740,6 +756,7 @@ def ai_ask(req: AiAskRequest):
                 total_fga = sum((s.fga or 0) for s in stats)
 
                 return {
+                    "window_games_requested": n,
                     "gp": len(stats),
                     "avg_pts": round(sum((s.pts or 0) for s in stats) / gp, 2),
                     "avg_reb": round(sum((s.reb or 0) for s in stats) / gp, 2),
@@ -749,8 +766,11 @@ def ai_ask(req: AiAskRequest):
                     "games": [
                         {
                             "date": (g.game_date.isoformat() + "Z") if g.game_date else None,
-                            "pts": s.pts, "reb": s.reb, "ast": s.ast,
-                            "fgm": s.fgm, "fga": s.fga,
+                            "pts": s.pts,
+                            "reb": s.reb,
+                            "ast": s.ast,
+                            "fgm": s.fgm,
+                            "fga": s.fga,
                             "plus_minus": s.plus_minus,
                             "min": s.minutes,
                         }
@@ -761,6 +781,7 @@ def ai_ask(req: AiAskRequest):
             data = {
                 "season": season,
                 "question_type": "compare_players_last_n",
+                "n": n,
                 "playerA": {
                     "nba_player_id": p1.nba_player_id,
                     "name": p1.full_name,
@@ -782,6 +803,7 @@ def ai_ask(req: AiAskRequest):
         parsed = parse_summarize_last_n(question)
         if parsed:
             name, n = parsed
+            n = clamp_n(n, default=10, max_n=50)
             p = resolve_player(db, name)
             if not p:
                 raise HTTPException(status_code=404, detail="Could not resolve player name.")
@@ -820,10 +842,16 @@ def ai_ask(req: AiAskRequest):
                 "games": [
                     {
                         "date": (g.game_date.isoformat() + "Z") if g.game_date else None,
-                        "pts": s.pts, "reb": s.reb, "ast": s.ast,
-                        "stl": s.stl, "blk": s.blk, "tov": s.tov,
-                        "fgm": s.fgm, "fga": s.fga,
-                        "fg3m": s.fg3m, "fg3a": s.fg3a,
+                        "pts": s.pts,
+                        "reb": s.reb,
+                        "ast": s.ast,
+                        "stl": s.stl,
+                        "blk": s.blk,
+                        "tov": s.tov,
+                        "fgm": s.fgm,
+                        "fga": s.fga,
+                        "fg3m": s.fg3m,
+                        "fg3a": s.fg3a,
                         "plus_minus": s.plus_minus,
                         "min": s.minutes,
                     }
@@ -835,10 +863,11 @@ def ai_ask(req: AiAskRequest):
             return {"intent": "player_last_n_summary", "answer": answer, "data": data}
 
         # ---------------------------------------------------------------------
-        # Intent 3: Most improved scoring over last 10 games (vs season avg)
+        # Intent 3: Most improved scoring over last N games (vs season avg)
         # ---------------------------------------------------------------------
-        if "improved" in q_lower and "scoring" in q_lower and "last 10" in q_lower:
-            # Season aggregates
+        if "improved" in q_lower and "scoring" in q_lower and "last" in q_lower and "game" in q_lower:
+            n = clamp_n(n_from_q or 10, default=10, max_n=50)
+
             season_sub = (
                 db.query(
                     PlayerGameStats.nba_player_id.label("player_id"),
@@ -860,7 +889,7 @@ def ai_ask(req: AiAskRequest):
                 order_by=desc(Game.game_date),
             ).label("rn")
 
-            last10_sub = (
+            lastn_sub = (
                 db.query(
                     PlayerGameStats.nba_player_id.label("player_id"),
                     PlayerGameStats.pts.label("pts"),
@@ -871,14 +900,14 @@ def ai_ask(req: AiAskRequest):
                 .filter(Game.nba_game_id.like("002%"))
             ).subquery()
 
-            last10_agg = (
+            lastn_agg = (
                 db.query(
-                    last10_sub.c.player_id,
-                    func.count().label("gp_last10"),
-                    func.avg(last10_sub.c.pts).label("ppg_last10"),
+                    lastn_sub.c.player_id,
+                    func.count().label("gp_lastn"),
+                    func.avg(lastn_sub.c.pts).label("ppg_lastn"),
                 )
-                .filter(last10_sub.c.rn <= 10)
-                .group_by(last10_sub.c.player_id)
+                .filter(lastn_sub.c.rn <= n)
+                .group_by(lastn_sub.c.player_id)
             ).subquery()
 
             rows = (
@@ -888,12 +917,12 @@ def ai_ask(req: AiAskRequest):
                     season_sub.c.team,
                     season_sub.c.gp,
                     (season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0)).label("ppg_season"),
-                    last10_agg.c.ppg_last10,
-                    (last10_agg.c.ppg_last10 - (season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0))).label("delta"),
+                    lastn_agg.c.ppg_lastn,
+                    (lastn_agg.c.ppg_lastn - (season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0))).label("delta"),
                 )
-                .join(last10_agg, last10_agg.c.player_id == season_sub.c.player_id)
-                .filter(season_sub.c.gp >= 10)
-                .filter(last10_agg.c.gp_last10 >= 10)
+                .join(lastn_agg, lastn_agg.c.player_id == season_sub.c.player_id)
+                .filter(season_sub.c.gp >= max(10, n))  # needs enough season games to be meaningful
+                .filter(lastn_agg.c.gp_lastn >= n)
                 .order_by(desc("delta"))
                 .limit(25)
                 .all()
@@ -901,7 +930,8 @@ def ai_ask(req: AiAskRequest):
 
             data = {
                 "season": season,
-                "question_type": "top_improved_scoring_last10_vs_season",
+                "question_type": "top_improved_scoring_lastN_vs_season",
+                "n": n,
                 "top_25": [
                     {
                         "player_id": int(r.player_id),
@@ -909,7 +939,7 @@ def ai_ask(req: AiAskRequest):
                         "team": r.team,
                         "gp": int(r.gp or 0),
                         "ppg_season": round(float(r.ppg_season or 0), 2),
-                        "ppg_last10": round(float(r.ppg_last10 or 0), 2),
+                        "ppg_lastN": round(float(r.ppg_lastn or 0), 2),
                         "delta": round(float(r.delta or 0), 2),
                     }
                     for r in rows
@@ -917,13 +947,15 @@ def ai_ask(req: AiAskRequest):
             }
 
             answer = summarize_with_openai(question, data)
-            return {"intent": "top_improved_scoring_last10_vs_season", "answer": answer, "data": data}
+            return {"intent": "top_improved_scoring_lastN_vs_season", "answer": answer, "data": data}
 
         # ---------------------------------------------------------------------
-        # Intent 4: Star players trending up (last 10 vs season avg)
-        # Definition (v1): "star" = season PPG >= 20 and GP >= 10
+        # Intent 4: Star players trending up (last N vs season avg)
+        # Definition (v1): "star" = season PPG >= 20 and GP >= max(10, N)
         # ---------------------------------------------------------------------
-        if "star" in q_lower and "trending" in q_lower and "last 10" in q_lower and "season" in q_lower:
+        if "star" in q_lower and "trending" in q_lower and "last" in q_lower and "season" in q_lower and "game" in q_lower:
+            n = clamp_n(n_from_q or 10, default=10, max_n=50)
+
             season_sub = (
                 db.query(
                     PlayerGameStats.nba_player_id.label("player_id"),
@@ -945,7 +977,7 @@ def ai_ask(req: AiAskRequest):
                 order_by=desc(Game.game_date),
             ).label("rn")
 
-            last10_sub = (
+            lastn_sub = (
                 db.query(
                     PlayerGameStats.nba_player_id.label("player_id"),
                     PlayerGameStats.pts.label("pts"),
@@ -956,15 +988,18 @@ def ai_ask(req: AiAskRequest):
                 .filter(Game.nba_game_id.like("002%"))
             ).subquery()
 
-            last10_agg = (
+            lastn_agg = (
                 db.query(
-                    last10_sub.c.player_id,
-                    func.count().label("gp_last10"),
-                    func.avg(last10_sub.c.pts).label("ppg_last10"),
+                    lastn_sub.c.player_id,
+                    func.count().label("gp_lastn"),
+                    func.avg(lastn_sub.c.pts).label("ppg_lastn"),
                 )
-                .filter(last10_sub.c.rn <= 10)
-                .group_by(last10_sub.c.player_id)
+                .filter(lastn_sub.c.rn <= n)
+                .group_by(lastn_sub.c.player_id)
             ).subquery()
+
+            ppg_season_expr = (season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0))
+            delta_expr = (lastn_agg.c.ppg_lastn - ppg_season_expr)
 
             rows = (
                 db.query(
@@ -972,14 +1007,14 @@ def ai_ask(req: AiAskRequest):
                     season_sub.c.player_name,
                     season_sub.c.team,
                     season_sub.c.gp,
-                    (season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0)).label("ppg_season"),
-                    last10_agg.c.ppg_last10,
-                    (last10_agg.c.ppg_last10 - (season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0))).label("delta"),
+                    ppg_season_expr.label("ppg_season"),
+                    lastn_agg.c.ppg_lastn,
+                    delta_expr.label("delta"),
                 )
-                .join(last10_agg, last10_agg.c.player_id == season_sub.c.player_id)
-                .filter(season_sub.c.gp >= 10)
-                .filter(last10_agg.c.gp_last10 >= 10)
-                .filter((season_sub.c.pts_total / func.nullif(season_sub.c.gp, 0)) >= 20)
+                .join(lastn_agg, lastn_agg.c.player_id == season_sub.c.player_id)
+                .filter(season_sub.c.gp >= max(10, n))
+                .filter(lastn_agg.c.gp_lastn >= n)
+                .filter(ppg_season_expr >= 20)
                 .order_by(desc("delta"))
                 .limit(15)
                 .all()
@@ -987,8 +1022,9 @@ def ai_ask(req: AiAskRequest):
 
             data = {
                 "season": season,
-                "question_type": "stars_trending_up_last10_vs_season",
-                "definition": {"star": "season PPG >= 20 and GP >= 10"},
+                "question_type": "stars_trending_up_lastN_vs_season",
+                "n": n,
+                "definition": {"star": f"season PPG >= 20 and GP >= {max(10, n)}"},
                 "top_15": [
                     {
                         "player_id": int(r.player_id),
@@ -996,7 +1032,7 @@ def ai_ask(req: AiAskRequest):
                         "team": r.team,
                         "gp": int(r.gp or 0),
                         "ppg_season": round(float(r.ppg_season or 0), 2),
-                        "ppg_last10": round(float(r.ppg_last10 or 0), 2),
+                        "ppg_lastN": round(float(r.ppg_lastn or 0), 2),
                         "delta": round(float(r.delta or 0), 2),
                     }
                     for r in rows
@@ -1004,12 +1040,14 @@ def ai_ask(req: AiAskRequest):
             }
 
             answer = summarize_with_openai(question, data)
-            return {"intent": "stars_trending_up_last10_vs_season", "answer": answer, "data": data}
+            return {"intent": "stars_trending_up_lastN_vs_season", "answer": answer, "data": data}
 
         # ---------------------------------------------------------------------
-        # Intent 5: Top 5 'winning impact' players by avg +/- in last 3 games
+        # Intent 5: Top 5 'winning impact' players by avg +/- in last N games
         # ---------------------------------------------------------------------
-        if "winning impact" in q_lower and "+/-" in q_lower and "last 3" in q_lower:
+        if "winning impact" in q_lower and "+/-" in q_lower and "last" in q_lower and "game" in q_lower:
+            n = clamp_n(n_from_q or 3, default=3, max_n=25)  # keep this smaller; +/- is noisy & payload grows
+
             rn = func.row_number().over(
                 partition_by=PlayerGameStats.nba_player_id,
                 order_by=desc(Game.game_date),
@@ -1029,12 +1067,12 @@ def ai_ask(req: AiAskRequest):
             agg = (
                 db.query(
                     sub.c.player_id,
-                    func.count().label("gp_last3"),
-                    func.avg(sub.c.plus_minus).label("avg_plus_minus_last3"),
+                    func.count().label("gp_lastn"),
+                    func.avg(sub.c.plus_minus).label("avg_plus_minus_lastn"),
                 )
-                .filter(sub.c.rn <= 3)
+                .filter(sub.c.rn <= n)
                 .group_by(sub.c.player_id)
-                .having(func.count() == 3)
+                .having(func.count() == n)  # ensure exactly N games available
             ).subquery()
 
             rows = (
@@ -1042,40 +1080,43 @@ def ai_ask(req: AiAskRequest):
                     agg.c.player_id,
                     Player.full_name.label("player_name"),
                     Team.abbreviation.label("team"),
-                    agg.c.avg_plus_minus_last3,
+                    agg.c.avg_plus_minus_lastn,
                 )
                 .join(Player, Player.nba_player_id == agg.c.player_id)
                 .outerjoin(Team, Team.nba_team_id == Player.nba_team_id)
-                .order_by(desc(agg.c.avg_plus_minus_last3))
+                .order_by(desc(agg.c.avg_plus_minus_lastn))
                 .limit(5)
                 .all()
             )
 
             data = {
                 "season": season,
-                "question_type": "top_winning_impact_avg_plus_minus_last3",
+                "question_type": "top_winning_impact_avg_plus_minus_lastN",
+                "n": n,
                 "top_5": [
                     {
                         "player_id": int(r.player_id),
                         "player_name": r.player_name,
                         "team": r.team,
-                        "avg_plus_minus_last3": round(float(r.avg_plus_minus_last3 or 0), 2),
+                        "avg_plus_minus_lastN": round(float(r.avg_plus_minus_lastn or 0), 2),
                     }
                     for r in rows
                 ],
             }
 
             answer = summarize_with_openai(question, data)
-            return {"intent": "top_winning_impact_avg_plus_minus_last3", "answer": answer, "data": data}
+            return {"intent": "top_winning_impact_avg_plus_minus_lastN", "answer": answer, "data": data}
 
         # ---------------------------------------------------------------------
         # Intent 6: Best single game stat line so far this season (PTS/REB/AST)
         # Definition: max (PTS + REB + AST) in one game
         # ---------------------------------------------------------------------
         if "best single game stat line" in q_lower or ("best" in q_lower and "single game" in q_lower and "stat line" in q_lower):
-            score = (func.coalesce(PlayerGameStats.pts, 0) +
-                     func.coalesce(PlayerGameStats.reb, 0) +
-                     func.coalesce(PlayerGameStats.ast, 0)).label("pra")
+            score = (
+                func.coalesce(PlayerGameStats.pts, 0)
+                + func.coalesce(PlayerGameStats.reb, 0)
+                + func.coalesce(PlayerGameStats.ast, 0)
+            ).label("pra")
 
             row = (
                 db.query(
@@ -1172,10 +1213,12 @@ def ai_ask(req: AiAskRequest):
             return {"intent": "most_minutes_total_and_avg", "answer": answer, "data": data}
 
         # ---------------------------------------------------------------------
-        # Intent 8: Best all-around player in the last 3 games (min 25 MPG)
+        # Intent 8: Best all-around player in the last N games (min 25 MPG)
         # Definition (v1): score = pts + 1.2*reb + 1.5*ast + 2*stl + 2*blk - 2*tov
         # ---------------------------------------------------------------------
-        if "best all-around" in q_lower and "last 3" in q_lower:
+        if "best all-around" in q_lower and "last" in q_lower and "game" in q_lower:
+            n = clamp_n(n_from_q or 3, default=3, max_n=25)
+
             rn = func.row_number().over(
                 partition_by=PlayerGameStats.nba_player_id,
                 order_by=desc(Game.game_date),
@@ -1183,12 +1226,12 @@ def ai_ask(req: AiAskRequest):
 
             min_float = minutes_expr_pg().label("min_float")
             score = (
-                func.coalesce(PlayerGameStats.pts, 0) +
-                1.2 * func.coalesce(PlayerGameStats.reb, 0) +
-                1.5 * func.coalesce(PlayerGameStats.ast, 0) +
-                2.0 * func.coalesce(PlayerGameStats.stl, 0) +
-                2.0 * func.coalesce(PlayerGameStats.blk, 0) -
-                2.0 * func.coalesce(PlayerGameStats.tov, 0)
+                func.coalesce(PlayerGameStats.pts, 0)
+                + 1.2 * func.coalesce(PlayerGameStats.reb, 0)
+                + 1.5 * func.coalesce(PlayerGameStats.ast, 0)
+                + 2.0 * func.coalesce(PlayerGameStats.stl, 0)
+                + 2.0 * func.coalesce(PlayerGameStats.blk, 0)
+                - 2.0 * func.coalesce(PlayerGameStats.tov, 0)
             ).label("score")
 
             sub = (
@@ -1206,13 +1249,13 @@ def ai_ask(req: AiAskRequest):
             agg = (
                 db.query(
                     sub.c.player_id,
-                    func.count().label("gp_last3"),
-                    func.avg(sub.c.min_float).label("avg_min_last3"),
-                    func.avg(sub.c.score).label("avg_score_last3"),
+                    func.count().label("gp_lastn"),
+                    func.avg(sub.c.min_float).label("avg_min_lastn"),
+                    func.avg(sub.c.score).label("avg_score_lastn"),
                 )
-                .filter(sub.c.rn <= 3)
+                .filter(sub.c.rn <= n)
                 .group_by(sub.c.player_id)
-                .having(func.count() == 3)
+                .having(func.count() == n)
                 .having(func.avg(sub.c.min_float) >= 25)
             ).subquery()
 
@@ -1221,37 +1264,40 @@ def ai_ask(req: AiAskRequest):
                     agg.c.player_id,
                     Player.full_name.label("player_name"),
                     Team.abbreviation.label("team"),
-                    agg.c.avg_min_last3,
-                    agg.c.avg_score_last3,
+                    agg.c.avg_min_lastn,
+                    agg.c.avg_score_lastn,
                 )
                 .join(Player, Player.nba_player_id == agg.c.player_id)
                 .outerjoin(Team, Team.nba_team_id == Player.nba_team_id)
-                .order_by(desc(agg.c.avg_score_last3))
+                .order_by(desc(agg.c.avg_score_lastn))
                 .first()
             )
 
             if not row:
-                raise HTTPException(status_code=404, detail="No eligible players found (need 3 games and >=25 MPG).")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No eligible players found (need {n} games and >=25 MPG).",
+                )
 
             data = {
                 "season": season,
-                "question_type": "best_all_around_last3_min25mpg",
+                "question_type": "best_all_around_lastN_min25mpg",
                 "definition": {
                     "min_mpg": 25,
-                    "window_games": 3,
+                    "window_games": n,
                     "score_formula": "pts + 1.2*reb + 1.5*ast + 2*stl + 2*blk - 2*tov",
                 },
                 "best_player": {
                     "player_id": int(row.player_id),
                     "player_name": row.player_name,
                     "team": row.team,
-                    "avg_min_last3": round(float(row.avg_min_last3 or 0), 2),
-                    "avg_score_last3": round(float(row.avg_score_last3 or 0), 2),
+                    "avg_min_lastN": round(float(row.avg_min_lastn or 0), 2),
+                    "avg_score_lastN": round(float(row.avg_score_lastn or 0), 2),
                 },
             }
 
             answer = summarize_with_openai(question, data)
-            return {"intent": "best_all_around_last3_min25mpg", "answer": answer, "data": data}
+            return {"intent": "best_all_around_lastN_min25mpg", "answer": answer, "data": data}
 
         # ---------------------------------------------------------------------
         # Fallback
@@ -1262,12 +1308,12 @@ def ai_ask(req: AiAskRequest):
                 "Question not supported yet. Try one of:\n"
                 "- Compare A and B in the last 5 games\n"
                 "- Summarize X's last 10 games\n"
-                "- Which players improved their scoring the most over the last 10 games?\n"
-                "- Which star players are trending up? Compare last 10 games vs season averages.\n"
-                "- Show me the top 5 'winning impact' players by average +/- in the last 3 games.\n"
+                "- Which players improved their scoring the most over the last N games?\n"
+                "- Which star players are trending up? Compare last N games vs season averages.\n"
+                "- Show me the top 5 'winning impact' players by average +/- in the last N games.\n"
                 "- What is the best single game stat line so far this season?\n"
                 "- Who has the most minutes?\n"
-                "- Who’s been the best all-around player in the last 3 games?"
+                "- Who’s been the best all-around player in the last N games?"
             ),
         )
 
@@ -1278,11 +1324,6 @@ def ai_ask(req: AiAskRequest):
 # ---------------------------------------------------------------------------------------------------------------------------------------------
 # REFRESH ENDPOINTS (ETL)
 # ---------------------------------------------------------------------------------------------------------------------------------------------
-# These endpoints are intentionally allowed to call nba_api.
-# They update the warehouse so the frontend can do fast DB-only reads.
-# ---------------------------------------------------------------------------------------------------------------------------------------------
-
-
 @app.post("/warehouse/refresh/last_days")
 def refresh_last_days(days: int = 14, season: str = "2025-26", max_games: int = 999999):
     """
@@ -1341,11 +1382,9 @@ def refresh_standings_current(season: str = "2025-26"):
                 "team_slug": r.get("TeamSlug"),
                 "conference": r.get("Conference"),
                 "playoff_rank": safe_int(r.get("PlayoffRank")),
-
                 "wins": safe_int(r.get("WINS")),
                 "losses": safe_int(r.get("LOSSES")),
                 "win_pct": safe_float(r.get("WinPCT")),
-
                 "home": r.get("HOME"),
                 "road": r.get("ROAD"),
                 "l10": r.get("L10"),
