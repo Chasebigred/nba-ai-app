@@ -457,7 +457,7 @@ function AIPage() {
    * Some are vague on purpose — the future model should be able to clarify and answer anyway.
    */
   const examples = [
-    "Compare Stephen Curry and Damian Lillard in the last 5 games.",
+    "Compare Stephen Curry and Giannis Antetokounmpo in the last 5 games.",
     "Summarize Nikola Jokić’s last 10 games",
     "Which players improved their scoring the most over the last 10 games?",
     "Which star players are trending up? Compare last 10 games vs season averages.",
