@@ -16,6 +16,7 @@ idna==3.11
 mangum==0.17.0
 nba_api==1.11.3
 numpy==2.2.6
+openai==2.14.0
 pandas==2.3.3
 psycopg2-binary==2.9.11
 pydantic==2.12.5
