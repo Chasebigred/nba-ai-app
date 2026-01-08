@@ -10,23 +10,25 @@ from requests.exceptions import ReadTimeout, ConnectionError
 # Ensure `backend/` is on the Python path so ETL can be run from `/etl` directly.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv3
+from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv3, leaguestandings
 from nba_api.stats.library.http import NBAStatsHTTP
 from sqlalchemy.dialects.postgresql import insert
 
 from db import SessionLocal
-from models import Team, Player, Game, PlayerGameStats
+from models import Team, Player, Game, PlayerGameStats, StandingsCurrent
 
 
-#Tried to get cloud scheduled ETLs to work using a non cloud IP. Still didnt work so am now using windows task scheduler on my own computer. (Dont want to pay for a server)
-NBAStatsHTTP.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-    "Referer": "https://www.nba.com/",
-    "Origin": "https://www.nba.com",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "application/json, text/plain, */*",
-    "Connection": "keep-alive",
-})
+# Tried to get cloud scheduled ETLs to work using a non cloud IP. Still didnt work so am now using windows task scheduler on my own computer. (Dont want to pay for a server)
+NBAStatsHTTP.headers.update(
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        "Referer": "https://www.nba.com/",
+        "Origin": "https://www.nba.com",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "application/json, text/plain, */*",
+        "Connection": "keep-alive",
+    }
+)
 
 
 def upper_cols(df):
@@ -283,6 +285,102 @@ def fetch_boxscore_frames(game_id: str, timeout: int = 60, retries: int = 1, ret
     return None
 
 
+def refresh_standings_current(
+    db,
+    season: str = "2025-26",
+    timeout: int = 30,
+    retries: int = 3,
+    base_sleep: float = 1.5,
+):
+    """
+    Refresh StandingsCurrent from nba_api and upsert into DB.
+
+    This fixes your issue where Task Scheduler runs only this ETL script:
+    - player/game stats update because they're in here
+    - standings DIDN'T update because they weren't in here
+    """
+    def safe_int(v):
+        try:
+            return int(v)
+        except Exception:
+            return None
+
+    def safe_float(v):
+        try:
+            return float(v)
+        except Exception:
+            return None
+
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            s = leaguestandings.LeagueStandings(season=season, season_type="Regular Season", timeout=timeout)
+            df = s.get_data_frames()[0]
+            df = upper_cols(df)
+            break
+        except (ReadTimeout, ConnectionError) as e:
+            last_err = e
+            if attempt < retries:
+                sleep_s = min(base_sleep * (2 ** attempt) + random.uniform(0.0, 0.75), 30.0)
+                print(f"Standings fetch timeout/network error (attempt {attempt+1}/{retries+1}). Sleeping {sleep_s:.1f}s...")
+                time.sleep(sleep_s)
+                continue
+            raise
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            if ("timed out" in msg or "timeout" in msg) and attempt < retries:
+                sleep_s = min(base_sleep * (2 ** attempt) + random.uniform(0.0, 0.75), 30.0)
+                print(f"Standings fetch error that looks like timeout (attempt {attempt+1}/{retries+1}). Sleeping {sleep_s:.1f}s...")
+                time.sleep(sleep_s)
+                continue
+            raise
+    else:
+        raise last_err
+
+    now = datetime.utcnow()
+    upserted = 0
+
+    for _, r in df.iterrows():
+        # Column names vary a bit; handle both cases safely
+        team_id = safe_int(pick(r, "TEAMID", "TEAM_ID"))
+        if team_id is None:
+            continue
+
+        payload = {
+            "season": season,
+            "team_id": team_id,
+            "team_name": pick(r, "TEAMNAME", "TEAM_NAME"),
+            "team_city": pick(r, "TEAMCITY", "TEAM_CITY"),
+            "team_slug": pick(r, "TEAMSLUG", "TEAM_SLUG"),
+            "conference": pick(r, "CONFERENCE"),
+            "playoff_rank": safe_int(pick(r, "PLAYOFFRANK", "PLAYOFF_RANK")),
+            # wins/losses sometimes come through as "WINS"/"LOSSES" or "W"/"L"
+            "wins": safe_int(pick(r, "WINS", "W")),
+            "losses": safe_int(pick(r, "LOSSES", "L")),
+            # win pct sometimes is "WINPCT" or "WIN_PCT"
+            "win_pct": safe_float(pick(r, "WINPCT", "WIN_PCT")),
+            "home": pick(r, "HOME"),
+            "road": pick(r, "ROAD"),
+            "l10": pick(r, "L10"),
+            "streak": pick(r, "STRCURRENTSTREAK", "STREAK"),
+            "updated_at": now,
+        }
+
+        stmt = (
+            insert(StandingsCurrent)
+            .values(**payload)
+            .on_conflict_do_update(
+                index_elements=[StandingsCurrent.season, StandingsCurrent.team_id],
+                set_=payload,
+            )
+        )
+        db.execute(stmt)
+        upserted += 1
+
+    return upserted
+
+
 def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep_seconds: float = 0.6):
     """
     Backfill the most recent `days` of NBA regular season games into the warehouse.
@@ -401,9 +499,7 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
                         player_name = pick(p, "PLAYERNAME", "NAMEI")
 
                     if nba_player_id is None:
-                        raise KeyError(
-                            f"Could not find PERSONID in player_df columns: {list(player_df.columns)[:40]}"
-                        )
+                        raise KeyError(f"Could not find PERSONID in player_df columns: {list(player_df.columns)[:40]}")
 
                     nba_player_id = int(nba_player_id)
                     nba_team_id = int(nba_team_id) if nba_team_id is not None and str(nba_team_id).isdigit() else None
@@ -455,6 +551,16 @@ def main(days: int = 14, season: str = "2025-26", max_games: int = 999999, sleep
                 db.rollback()
                 failed += 1
                 print(f"FAILED GAME_ID={game_id}: {type(e).__name__}: {e}")
+
+        # ✅ NEW: refresh standings at the end of the ETL run (one call, not per-game)
+        try:
+            print(f"Refreshing standings_current for season={season} ...")
+            upserted = refresh_standings_current(db, season=season, timeout=30, retries=3, base_sleep=1.5)
+            db.commit()
+            print(f"Standings refreshed. upserted={upserted}")
+        except Exception as e:
+            db.rollback()
+            print(f"WARNING: standings refresh failed: {type(e).__name__}: {e}")
 
         print("Done.")
         print({"fetched": fetched, "skipped": skipped, "failed": failed})

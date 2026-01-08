@@ -107,6 +107,14 @@ type PlayerLastNResponse = {
   source: string;
 };
 
+
+type AskAIResponse = {
+  intent: string;
+  answer: string;
+  data?: unknown;
+};
+
+
 /**
  * API base URL:
  * - In dev: defaults to local FastAPI
@@ -440,6 +448,9 @@ function AIPage() {
   const [question, setQuestion] = useState("");
   const [status, setStatus] = useState<"idle" | "thinking">("idle");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const season = "2025-26"; // keep simple for now
+
 
   /**
    * Example prompts are intentionally “strong” so the UI sells the idea of AI-powered analytics.
@@ -470,7 +481,7 @@ function AIPage() {
    * Temporary placeholder behavior until the AI endpoint is live.
    * This function simulates a request/response flow so the UI feels real.
    */
-  function mockAsk() {
+  async function askAI() {
     const q = question.trim();
     if (!q) return;
 
@@ -480,25 +491,56 @@ function AIPage() {
     // 2) Clear input + set "thinking" state
     setQuestion("");
     setStatus("thinking");
+    setError(null);
 
-    // 3) Insert placeholder assistant bubble, then replace it after a short delay
+    // 3) Placeholder assistant bubble
     const assistantId = addMsg("assistant", "…");
 
-    setTimeout(() => {
-      setStatus("idle");
+    try {
+      const r = await fetch(`${API}/ai/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, season }),
+      });
+
+      // If backend returns non-200, surface it in chat
+      if (!r.ok) {
+        const txt = await r.text();
+        throw new Error(`HTTP ${r.status}: ${txt}`);
+      }
+
+      const data: AskAIResponse = await r.json();
+
       setMessages((m) =>
         m.map((x) =>
           x.id === assistantId
             ? {
                 ...x,
-                text:
-                  "Got it — once AI answers are enabled, I’ll respond here.\n\nFor now, you can use Player / Leaders / Standings to explore the data.",
+                // show the model answer (and optionally intent)
+                text: data.answer,
               }
             : x
         )
       );
-    }, 650);
+    } catch (e: any) {
+      const msg = e?.message ?? "AI request failed";
+      setError(msg);
+
+      setMessages((m) =>
+        m.map((x) =>
+          x.id === assistantId
+            ? {
+                ...x,
+                text: `Sorry — I couldn’t answer that right now.\n\n${msg}`,
+              }
+            : x
+        )
+      );
+    } finally {
+      setStatus("idle");
+    }
   }
+
 
   return (
     <div className="grid gap-4">
@@ -580,6 +622,11 @@ function AIPage() {
 
                 {/* Composer pinned to bottom (like texting) */}
                 <div className="border-t border-slate-800/70 bg-slate-950/35 p-3">
+                  {error ? (
+                    <div className="mb-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                      {error}
+                    </div>
+                  ) : null}
                   <textarea
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
@@ -589,14 +636,14 @@ function AIPage() {
                       // Enter to send (Shift+Enter for newline)
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        mockAsk();
+                        askAI();
                       }
                     }}
                   />
 
                   <div className="mt-2 flex flex-wrap gap-2 justify-end">
                     <Button
-                      onClick={mockAsk}
+                      onClick={askAI}
                       disabled={status === "thinking" || question.trim().length === 0}
                       className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.28)]"
                     >
@@ -610,6 +657,7 @@ function AIPage() {
                         setQuestion("");
                         setMessages([]);
                         setStatus("idle");
+                        setError(null);
                       }}
                     >
                       Clear chat
@@ -629,7 +677,10 @@ function AIPage() {
                   {examples.map((ex) => (
                     <button
                       key={ex}
-                      onClick={() => setQuestion(ex)}
+                      onClick={() => {
+                        setQuestion(ex);
+                        setError(null);
+                      }}
                       className="w-full text-left rounded-xl border border-slate-800/70 bg-slate-950/25 px-3 py-2 hover:bg-slate-950/45 transition"
                     >
                       {ex}
