@@ -290,11 +290,13 @@ function HomePage() {
         <CardContent className="pt-0 space-y-4 text-slate-200">
           <p className="text-slate-300 leading-relaxed">
             <span className="font-semibold text-slate-100">NBA Insight</span> is a full-stack NBA analytics application
-            focused on fast, clean exploration of player data, league leaders, and standings. The frontend is built with{" "}
-            <span className="font-semibold text-slate-100">React + TypeScript</span>, backed by a{" "}
-            <span className="font-semibold text-slate-100">FastAPI (Python)</span> API running on{" "}
-            <span className="font-semibold text-slate-100">AWS Lambda</span> and a{" "}
-            <span className="font-semibold text-slate-100">PostgreSQL</span> warehouse optimized for efficient reads.
+            that ingests official NBA data, stores it in a{" "}
+            <span className="font-semibold text-slate-100">PostgreSQL data warehouse</span>, and serves fast,
+            query-optimized endpoints to a modern{" "}
+            <span className="font-semibold text-slate-100">React + TypeScript</span> frontend. The backend is a{" "}
+            <span className="font-semibold text-slate-100">FastAPI (Python)</span> API deployed on{" "}
+            <span className="font-semibold text-slate-100">AWS Lambda</span>, designed with production-style architecture
+            and cloud deployment in mind.
           </p>
 
           <div className="grid gap-3 md:grid-cols-2">
@@ -305,58 +307,120 @@ function HomePage() {
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ul className="list-disc pl-5 space-y-2">
                   <li>
-                    <span className="font-semibold text-slate-100">Search players:</span> Search players stored in the
+                    <span className="font-semibold text-slate-100">Explore leaders:</span> Browse leaderboards (PTS, REB,
+                    AST, FG%, 3PT%) computed from warehouse data.
+                  </li>
+                  <li>
+                    <span className="font-semibold text-slate-100">Search players:</span> Find players stored in the
                     database and view recent game logs plus per-game averages.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Explore leaders:</span> Browse leaderboard categories
-                    (3PT%, FG%, PPG, RPG, APG, BPG). Selecting a player jumps directly to their detail view.
+                    <span className="font-semibold text-slate-100">Check standings:</span> View current season standings
+                    served from the warehouse for fast load times.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Check standings:</span> View current season standings
-                    served from the database for fast load times.
+                    <span className="font-semibold text-slate-100">Ask in plain English:</span> Use the AI tab for
+                    summaries and trend-style questions grounded in the data warehouse.
                   </li>
                 </ul>
 
                 <div className="mt-3 text-xs text-slate-400">
-                  Tip: leaderboards support “Load more” by increasing the API limit parameter.
+                  Tip: leaderboards support “Load more” via the API limit parameter.
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-950/25 border-slate-800/70">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base text-slate-100">How it works</CardTitle>
+                <CardTitle className="text-base text-slate-100">AI, safely</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>
+                    The natural language layer uses the{" "}
+                    <span className="font-semibold text-slate-100">OpenAI API</span> to interpret intent and route prompts
+                    to predefined backend query functions.
+                  </li>
+                  <li>
+                    Those functions run{" "}
+                    <span className="font-semibold text-slate-100">controlled SQL queries</span> against the PostgreSQL
+                    warehouse.
+                  </li>
+                  <li>
+                    The AI formats results into readable summaries without inventing stats.
+                  </li>
+                </ul>
+
+                <div className="mt-3 text-xs text-slate-400">
+                  Note: The AI does <span className="text-slate-300">not</span> browse live NBA data and cannot generate
+                  statistics that are not present in the warehouse.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </GlassCard>
+
+      <GlassCard>
+        <CardHeader className="pb-3">
+          <SectionHeader title="How it works" />
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Card className="bg-slate-950/25 border-slate-800/70">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-slate-100">Read path (user traffic)</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
                 <ol className="list-decimal pl-5 space-y-2">
                   <li>
                     The React frontend calls{" "}
                     <span className="font-semibold text-slate-100">REST-style JSON endpoints</span> exposed by a{" "}
-                    <span className="font-semibold text-slate-100">FastAPI (Python)</span> backend deployed on{" "}
-                    <span className="font-semibold text-slate-100">AWS Lambda</span>.
+                    <span className="font-semibold text-slate-100">FastAPI (Python)</span> backend.
                   </li>
                   <li>
-                    Read endpoints query PostgreSQL (warehouse tables) to return player stats, leaderboards, and standings.
+                    The API reads from{" "}
+                    <span className="font-semibold text-slate-100">PostgreSQL warehouse tables</span> to return player
+                    stats, leaderboards, and standings.
                   </li>
                   <li>
-                    A scheduled job runs nightly (e.g., around{" "}
-                    <span className="font-semibold text-slate-100">2 AM</span>) to ingest recent NBA games and{" "}
-                    <span className="font-semibold text-slate-100">upsert</span> teams, players, games, and box scores.
-                  </li>
-                  <li>
-                    Standings are refreshed by ingesting from an external NBA data source and upserting into a dedicated{" "}
-                    <span className="font-semibold text-slate-100">standings_current</span> table.
-                  </li>
-                  <li>
-                    The UI consumes database-backed responses — external API calls are used for ETL only (not for user-facing
-                    reads).
+                    No third-party NBA API calls occur on user-facing requests.
                   </li>
                 </ol>
 
                 <div className="mt-3 text-xs text-slate-400">
-                  Note: The API includes admin ETL endpoints for maintenance/testing, but the UI is designed around scheduled
-                  updates (no manual refresh button).
+                  Designed for fast reads and predictable performance.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-950/25 border-slate-800/70">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-slate-100">Write path (ETL)</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 text-sm text-slate-300 space-y-2">
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>
+                    Scheduled ETL pulls data from{" "}
+                    <span className="font-semibold text-slate-100">stats.nba.com</span> (via <code className="text-slate-200">nba_api</code>).
+                  </li>
+                  <li>
+                    Data is normalized and{" "}
+                    <span className="font-semibold text-slate-100">upserted</span> into teams, players, games, and box
+                    score tables.
+                  </li>
+                  <li>
+                    Standings are refreshed independently and written into a dedicated{" "}
+                    <span className="font-semibold text-slate-100">standings</span> table.
+                  </li>
+                  <li>
+                    ETL runs on a scheduled host (Windows Task Scheduler) due to NBA API restrictions on some cloud IPs.
+                  </li>
+                </ol>
+
+                <div className="mt-3 text-xs text-slate-400">
+                  Ingestion is isolated from reads so the UI stays fast even if the upstream data source is unavailable.
                 </div>
               </CardContent>
             </Card>
@@ -382,17 +446,20 @@ function HomePage() {
                     shadcn/ui.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Backend:</span> FastAPI{" "}
-                    <span className="font-semibold text-slate-100">(Python)</span> on AWS Lambda, SQLAlchemy ORM, REST-style
+                    <span className="font-semibold text-slate-100">Backend:</span> FastAPI (Python), SQLAlchemy, REST-style
                     JSON endpoints.
+                  </li>
+                  <li>
+                    <span className="font-semibold text-slate-100">AI:</span> OpenAI API (server-side only), function-based
+                    routing, deterministic SQL queries.
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Database:</span> PostgreSQL (Amazon RDS) with Alembic
                     migrations.
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">Data pipeline:</span> Scheduled ETL that backfills recent
-                    games and refreshes standings snapshots.
+                    <span className="font-semibold text-slate-100">Data pipeline:</span> Scheduled ETL ingestion and
+                    standings refresh.
                   </li>
                 </ul>
               </CardContent>
@@ -408,8 +475,7 @@ function HomePage() {
                     <span className="font-semibold text-slate-100">Frontend:</span> AWS Amplify (static hosting + CI/CD).
                   </li>
                   <li>
-                    <span className="font-semibold text-slate-100">API:</span> Amazon API Gateway → AWS Lambda (FastAPI
-                    (Python)).
+                    <span className="font-semibold text-slate-100">API:</span> Amazon API Gateway → AWS Lambda (FastAPI).
                   </li>
                   <li>
                     <span className="font-semibold text-slate-100">Database:</span> Amazon RDS (PostgreSQL).
@@ -430,6 +496,7 @@ function HomePage() {
     </div>
   );
 }
+
 
 type ChatMsg = {
   id: string;

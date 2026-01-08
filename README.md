@@ -1,4 +1,4 @@
-# NBA AI App
+# NBA Insight
 
 A full-stack NBA analytics application that ingests official NBA data, stores it in a PostgreSQL data warehouse, and serves fast, query-optimized endpoints to a modern React frontend. The system is designed with production-style architecture and cloud deployment on AWS in mind.
 
@@ -6,7 +6,7 @@ A full-stack NBA analytics application that ingests official NBA data, stores it
 
 ## Overview
 
-The NBA AI App separates data ingestion from data consumption to ensure reliability, performance, and scalability.
+The NBA Insight App separates data ingestion from data consumption to ensure reliability, performance, and scalability.
 
 - External NBA data is ingested via scheduled ETL jobs  
 - All frontend reads come exclusively from a PostgreSQL warehouse  (AWS RDS)
@@ -30,7 +30,32 @@ This mirrors real-world analytics systems where read performance and API stabili
 
 ---
 
+## AI & Natural Language Queries
+
+The natural language layer uses the OpenAI API to interpret user intent
+and route requests to predefined backend query functions.
+
+The application includes an AI-powered natural language layer that allows users to ask questions such as:
+
+- "Summarize Nikola Jokić’s last 7 games"
+- "Who has improved their scoring the most recently?"
+- "Compare recent performance to season averages"
+
+User prompts are routed to predefined backend query functions.
+Each function executes controlled SQL queries against the PostgreSQL warehouse,
+and the AI formats the results into readable summaries.
+
+The AI does not browse live data and cannot generate statistics that are not present in the warehouse.
+All responses are grounded in stored NBA game data.
+
+---
+
 ## Tech Stack
+
+### AI
+- OpenAI API (server-side only)
+- Function-based prompt routing
+- Deterministic query execution against PostgreSQL
 
 ### Backend
 - FastAPI
@@ -102,7 +127,7 @@ nba-ai-app/
 This application is deployed on AWS with a cost-conscious setup suitable for a portfolio project.
 
 - Frontend: AWS Amplify Hosting with CI/CD from GitHub
-- Backend: FastAPI (python)
+- Backend: Amazon API Gateway → AWS Lambda (FastAPI / Python)
 - Database: Amazon RDS for PostgreSQL
 - ETL: Scheduled ETL jobs on Windows Task Scheduler (due to NBA's API blocking cloud IPs, couldn't use cloud schedule tasks)
 - Configuration/Secrets: Environment variables (optionally stored in AWS Systems Manager Parameter Store / Secrets Manager)
